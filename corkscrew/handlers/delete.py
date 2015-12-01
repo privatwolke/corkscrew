@@ -3,7 +3,7 @@
 import json
 from common import *
 from jsonapi import *
-from bottle import response
+from bottle import response, abort
 
 
 def fn_delete(model):

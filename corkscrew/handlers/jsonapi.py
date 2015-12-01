@@ -27,14 +27,16 @@ class JsonAPIResponse(JsonAPIBase):
 
 		if self.errors:
 			yield ("errors", [dict(error) for error in self.errors])
+			return
 
-		if self.data:
-			if type(self.data) is type([]):
-				yield ("data", [dict(d) for d in self.data])
-			else:
-				yield ("data", dict(self.data))
+		if type(self.data) is type([]):
+			yield ("data", [dict(d) for d in self.data])
+		elif self.data is None:
+			yield ("data", None)
+		else:
+			yield ("data", dict(self.data))
 
-		if not ((hasattr(self, "meta") and self.meta) or self.data or self.errors):
+		if not ((hasattr(self, "meta") and self.meta) or hasattr(self, "data") or self.errors):
 			raise JsonAPIException("A document MUST contain at least one of the following top-level members: data, errors, meta.")
 
 
@@ -77,5 +79,22 @@ class JsonAPIResource(JsonAPIBase):
 
 
 class JsonAPIRelationships(JsonAPIBase):
+	def __init__(self, endpoint):
+		self.data = {}
+		self.endpoint =  endpoint
+
+	def __len__(self):
+		return len(self.data)
+
+	def add(self, _id, relation, _type, value):
+		self.data[relation] = {
+			"links": {
+				"related": "{}/{}/{}".format(self.endpoint, _id, relation),
+				"self": "{}/{}/relationships/{}".format(self.endpoint, _id, relation)
+			},
+			"data": { "id": value, "type": _type }
+		}
+
 	def generator(self):
-		pass
+		for key, value in self.data.iteritems():
+			yield (key, value)

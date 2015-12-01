@@ -1,7 +1,8 @@
 # coding: utf-8
 
-from peewee import ForeignKeyField
-from jsonapi import JsonAPIResource
+import datetime
+from peewee import ForeignKeyField, PrimaryKeyField
+from jsonapi import JsonAPIResource, JsonAPIRelationships
 
 def model_to_endpoint(model):
 	return model.__name__.lower()
@@ -11,16 +12,28 @@ def get_primary_key(entry):
 	return getattr(entry, entry.__class__._meta.primary_key.name)
 
 
-def entry_to_resource(entry):
+def entry_to_resource(entry, endpoint):
 	meta = entry.__class__._meta
 	primary_key_field = meta.primary_key
 	primary_key = get_primary_key(entry)
 
 	attributes = {}
-	for field in meta.get_fields():
-		if type(field) is ForeignKeyField:
-			attributes[field.name] = get_primary_key(getattr(entry, field.name))
-		elif not field is primary_key_field:
-			attributes[field.name] = getattr(entry, field.name)
+	relationships = JsonAPIRelationships(endpoint)
 
-	return JsonAPIResource(primary_key, model_to_endpoint(entry.__class__), attributes = attributes)
+	for field in meta.get_fields():
+		if isinstance(field, ForeignKeyField):
+			obj = getattr(entry, field.name)
+			relationships.add(primary_key, field.name, obj.__class__._meta.name, get_primary_key(obj))
+		elif not isinstance(field, PrimaryKeyField):
+			attr = getattr(entry, field.name)
+			if isinstance(attr, datetime.date):
+				attr = str(attr)
+
+			attributes[field.name] = attr
+
+	res = JsonAPIResource(primary_key, model_to_endpoint(entry.__class__), attributes = attributes)
+
+	if len(relationships):
+		res.relationships = relationships
+
+	return res
