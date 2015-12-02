@@ -91,9 +91,10 @@ class JsonAPIRelationships(JsonAPIBase):
 			"links": {
 				"related": "{}/{}/{}".format(self.endpoint, _id, relation),
 				"self": "{}/{}/relationships/{}".format(self.endpoint, _id, relation)
-			},
-			"data": { "id": value, "type": _type }
+			}
 		}
+		if _type and value:
+			self.data[relation]["data"] = { "id": value, "type": _type }
 
 	def generator(self):
 		for key, value in self.data.iteritems():

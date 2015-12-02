@@ -23,7 +23,11 @@ def entry_to_resource(entry, endpoint):
 	for field in meta.get_fields():
 		if isinstance(field, ForeignKeyField):
 			obj = getattr(entry, field.name)
-			relationships.add(primary_key, field.name, obj.__class__._meta.name, get_primary_key(obj))
+			if obj:
+				relationships.add(primary_key, field.name, obj.__class__._meta.name, get_primary_key(obj))
+			else:
+				relationships.add(primary_key, field.name, None, None)
+
 		elif not isinstance(field, PrimaryKeyField):
 			attr = getattr(entry, field.name)
 			if isinstance(attr, datetime.date):

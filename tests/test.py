@@ -6,7 +6,7 @@ from urlparse import urlparse
 from webtest import TestApp
 from peewee import SqliteDatabase
 from corkscrew import BottleApplication
-from corkscrew.fixtures import database, Person, Test
+from corkscrew.fixtures import database, Person, Test, Article
 
 
 def validate_content_type(content_type):
@@ -35,6 +35,9 @@ def validate_jsonapi(doc, is_client_generated = False):
 	assert "data" in doc or "errors" in doc or "meta" in doc, "A document MUST contain at least one of the following top-level members: data, errors, meta."
 	assert not ("data" in doc and "errors" in doc), "The members data and errors MUST NOT coexist in the same document."
 
+	for key in doc.keys():
+		assert key in ["data", "errors", "meta"], "objects defined by this specification MUST NOT contain any additional members"
+
 	if "data" in doc:
 		assert doc["data"] is None or isinstance(doc["data"], dict) or isinstance(doc["data"], list), "Primary data MUST be either: null, dict or list."
 
@@ -58,8 +61,14 @@ def validate_jsonapi(doc, is_client_generated = False):
 
 	if "jsonapi" in doc:
 		assert isinstance(doc["jsonapi"], dict), "If present, the value of the jsonapi member MUST be an object (a 'jsonapi object')."
+		for key in doc["jsonapi"].keys():
+			assert key in ["version", "meta"]
+
 		if "meta" in doc["jsonapi"]:
 			assert isinstance(doc["jsonapi"]["meta"], dict), "This object MAY also contain a meta member, whose value is a meta object that contains non-standard meta-information."
+
+		if "version" in doc["jsonapi"]:
+			assert isinstance(doc["jsonapi"]["version"], unicode), "The jsonapi object MAY contain a version member whose value is a string indicating the highest JSON API version supported."
 
 	if "meta" in doc:
 		assert isinstance(doc["meta"], dict), "The value of each meta member MUST be an object (a 'meta object')."
@@ -77,13 +86,20 @@ def validate_links(links):
 		if isinstance(link, unicode):
 			assert urlparse(link), "Invalid link member. Could not parse URL."
 		else:
+			for key in link.keys():
+				assert key in ["href", "meta"], "objects defined by this specification MUST NOT contain any additional members"
+
 			if "href" in link:
 				assert urlparse(link["href"]), "Invalid link[href] member. Could not parse URL."
 
 
 def validate_resource(resource, is_client_generated = False):
+	assert isinstance(resource, dict), "A resource object must be of type dict."
 	assert "type" in resource, "A resource object MUST contain at least the following top-level member: type."
 	assert isinstance(resource["type"], unicode), "The value of the type member MUST be a unicode."
+
+	for key in resource.keys():
+		assert key in ["id", "type", "attributes", "relationships", "links", "meta"], "objects defined by this specification MUST NOT contain any additional member"
 
 	if not is_client_generated:
 		assert "id" in resource, "A resource object MUST contain at least the following top-level member: id."
@@ -129,7 +145,11 @@ def validate_relationships(relationships):
 	assert isinstance(relationships, dict), "The value of the relationships key MUST be an object (a 'relationships object')."
 
 	for key, relationship in relationships.iteritems():
+		assert isinstance(relationship, dict), "A relationship object must be a dict."
 		assert "links" in relationship or "data" in relationship or "meta" in relationship, "A 'relationship object' MUST contain at least one of the following: links, data, meta."
+
+		for key in relationship.keys():
+			assert key in ["links", "data", "meta"], "objects defined by this specification MUST NOT contain any additional member"
 
 		if "links" in relationship:
 			assert "self" in relationship["links"] or "related" in relationship["links"], "A 'links object' in this context contains at least one of: self, related."
@@ -153,6 +173,10 @@ def validate_resource_identifier(identifier):
 
 def validate_error(error):
 	assert isinstance(error, dict), "An error must be an object."
+
+	for key in error.keys():
+		assert key in ["id", "links", "status", "code", "title", "detail", "source", "meta"], "objects defined by this specification MUST NOT contain any additional member"
+
 	if "links" in error:
 		validate_links(error["links"], fields = ["about"])
 
@@ -175,13 +199,14 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def setUp(self):
 		database.initialize(SqliteDatabase(":memory:"))
-		database.create_tables([Person, Test])
+		database.create_tables([Person, Test, Article])
 		p = Person.create(name = "John Doe")
 		Person.create(name = "Jane Doe")
 		Test.create(value = "First Entry", author = p)
 		Test.create(value = "Second Entry", author = p)
 		app = BottleApplication()
 		app.register(Test)
+		app.register(Article, endpoint = "/articles")
 		self.app = TestApp(app)
 
 
@@ -374,3 +399,38 @@ class TestCorkscrew(unittest.TestSuite):
 		elif result.status == "200 OK":
 			assert result.json
 			validate_jsonapi(result.json)
+
+
+	def testFetchingDataCollection(self):
+		result = self.app.get("/articles")
+		validate_content_type(result.content_type)
+
+		assert result.status == "200 OK"
+		assert result.json
+		validate_jsonapi(result.json)
+
+		assert len(result.json["data"]) is 0
+
+		Article.create(title = "JSON API paints my bikeshed!")
+		Article.create(title = "Rails is Omakase")
+
+		result = self.app.get("/articles")
+		validate_content_type(result.content_type)
+
+		assert result.status == "200 OK"
+		assert result.json
+		validate_jsonapi(result.json)
+		
+		assert result.json["data"] == [{
+			"type": "article",
+			"id": "1",
+			"attributes": {
+				"title": "JSON API paints my bikeshed!"
+			}
+		}, {
+			"type": "article",
+			"id": "2",
+			"attributes": {
+				"title": "Rails is Omakase"
+			}
+		}]

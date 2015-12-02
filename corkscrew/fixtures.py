@@ -28,3 +28,9 @@ class Tag(BaseModel):
 class TestTag(BaseModel):
 	test = ForeignKeyField(Test)
 	tag = ForeignKeyField(Tag)
+
+
+class Article(BaseModel):
+	id = PrimaryKeyField()
+	title = CharField()
+	author = ForeignKeyField(Person, null = True)

@@ -17,7 +17,7 @@ def fn_list(model, endpoint):
 			for entry in model.select():
 				doc.data.append(entry_to_resource(entry, endpoint))
 
-			return json.dumps(dict(doc))
+			return json.dumps(dict(doc), sort_keys = True)
 
 		except Exception as e:
 			abort(500, e.message)
