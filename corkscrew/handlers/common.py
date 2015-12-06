@@ -25,7 +25,7 @@ def entry_to_resource(entry):
 	attributes = {}
 	relationships = JsonAPIRelationships(get_endpoint())
 
-	for field in meta.get_fields():
+	for field in meta.sorted_fields:
 		if isinstance(field, ForeignKeyField):
 			obj = getattr(entry, field.name)
 			if obj:

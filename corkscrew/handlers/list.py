@@ -7,7 +7,7 @@ from bottle import response, abort
 
 
 def fn_list(model, endpoint):
-	foreign_keys = filter(lambda x: isinstance(x, ForeignKeyField), model._meta.get_fields())
+	foreign_keys = filter(lambda x: isinstance(x, ForeignKeyField), model._meta.sorted_fields)
 
 	def jsonp_list():
 		response.content_type = CONTENT_TYPE

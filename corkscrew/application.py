@@ -24,12 +24,12 @@ class BottleApplication(Bottle):
 		self.delete(endpoint + "/<_id>")(fn_delete(model))
 		self.error_handler = { x: fn_error for x in xrange(400, 601) }
 
-		for f in model._meta.get_fields():
+		for f in model._meta.sorted_fields:
 			if isinstance(f, ForeignKeyField):
 				self.register_relation(endpoint, abs_endpoint, model, f.name)
 
 		for name, relation in relationships:
-			field = filter(lambda x: x.rel_model != model, filter(lambda x: isinstance(x, ForeignKeyField), relation._meta.get_fields()))[0]
+			field = filter(lambda x: x.rel_model != model, filter(lambda x: isinstance(x, ForeignKeyField), relation._meta.sorted_fields))[0]
 			self.register_relation(endpoint, abs_endpoint, relation, name)
 
 
