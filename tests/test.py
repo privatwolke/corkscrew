@@ -6,7 +6,7 @@ from urlparse import urlparse
 from webtest import TestApp
 from peewee import SqliteDatabase
 from corkscrew import BottleApplication
-from corkscrew.fixtures import database, Person, Test, Article
+from corkscrew.fixtures import database, Person, Test, Article, People, Photos
 
 
 def validate_content_type(content_type):
@@ -199,7 +199,7 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def setUp(self):
 		database.initialize(SqliteDatabase(":memory:"))
-		database.create_tables([Person, Test, Article])
+		database.create_tables([Person, Test, Article, People, Photos])
 		p = Person.create(name = "John Doe")
 		Person.create(name = "Jane Doe")
 		Test.create(value = "First Entry", author = p)
@@ -207,6 +207,8 @@ class TestCorkscrew(unittest.TestSuite):
 		app = BottleApplication()
 		app.register(Test)
 		app.register(Article, endpoint = "/articles")
+		app.register(Photos)
+		app.register(People)
 		self.app = TestApp(app)
 
 
@@ -312,7 +314,12 @@ class TestCorkscrew(unittest.TestSuite):
 		validate_jsonapi(request)
 
 		result = self.app.patch_json("/test/1", params = request)
-		assert result.status == "202 Accepted" or result.status == "200 OK"
+		assert result.status == "202 Accepted" or result.status == "200 OK" or result.status == "204 No Content"
+
+		if result.status == "204 No Content":
+			# nothing more to test
+			return
+
 		validate_content_type(result.content_type)
 
 		assert result.json
@@ -467,3 +474,71 @@ class TestCorkscrew(unittest.TestSuite):
 		result = self.app.get("/article/1", status = 404)
 		assert result.json
 		validate_jsonapi(result.json)
+
+
+	def testCreatingResourceWithReferences(self):
+		People.create(id = 9)
+
+		request = {u"data": {
+			u"type": u"photos",
+			u"attributes": {
+				u"title": u"Ember Hamster",
+				u"src": u"http://example.com/images/productivity.png"
+			},
+			u"relationships": {
+				u"photographer": {
+					u"data": { u"type": u"people", u"id": u"9" }
+				}
+			}
+		}}
+
+		validate_jsonapi(request, True)
+
+		result = self.app.post_json("/photos", params = request)
+		validate_content_type(result.content_type)
+		validate_jsonapi(result.json)
+
+		if not result.location:
+			warnings.warn("The response SHOULD include a Location header identifying the location of the newly created resource.")
+
+		else:
+			res = self.app.get(result.location)
+			assert res.json
+			validate_jsonapi(res.json)
+
+
+	def testCreateResourceWithAlreadyExistingId(self):
+		People.create(id = 1)
+
+		request = {
+			u"data": {
+				u"type": u"people",
+				u"id": u"1"
+			}
+		}
+
+		validate_jsonapi(request)
+
+		# expect this to fail
+		result = self.app.post_json("/people", params = request, status = 409)
+		validate_jsonapi(result.json)
+
+
+	def testUpdatingResource(self):
+		Article.create(id = 1, title = "Five Ways You Have Never Tried To Access Your Data")
+		result = self.app.get("/articles/1")
+		update_uri = result.json["data"]["links"]["self"]
+
+		request = {
+			u"data": {
+				u"type": u"article",
+				u"id": u"1",
+				u"attributes": {
+					u"title": u"To TDD or Not"
+				}
+			}
+		}
+
+		validate_jsonapi(request)
+		res = self.app.patch_json(update_uri, params = request)
+		print res.body

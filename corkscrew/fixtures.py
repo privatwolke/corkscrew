@@ -34,3 +34,14 @@ class Article(BaseModel):
 	id = PrimaryKeyField()
 	title = CharField()
 	author = ForeignKeyField(Person, null = True)
+
+
+class People(BaseModel):
+	id = PrimaryKeyField()
+
+
+class Photos(BaseModel):
+	id = PrimaryKeyField()
+	title = CharField()
+	src = CharField()
+	photographer = ForeignKeyField(People)

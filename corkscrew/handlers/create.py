@@ -17,24 +17,26 @@ def fn_create(model, endpoint):
 			assert "data" in request_doc, JsonAPIException("The request MUST include a single resource object as primary data.")
 			assert type(request_doc["data"]) is type({}), JsonAPIException("The request MUST include a single resource object as primary data.")
 			assert "type" in request_doc["data"], JsonAPIException("The resource object MUST contain at least a type member.")
-			assert endpoint.endswith(request_doc["data"]["type"]), JsonAPIException("Cannot create resources of type '{}'.".format(request_doc["data"]["type"]))
+
+			if not endpoint.endswith(request_doc["data"]["type"]):
+				abort(409, JsonAPIException("Cannot create resources of type '{}'.".format(request_doc["data"]["type"])))
 
 			# TODO: If a relationship is provided in the relationships member of the resource object, its value MUST be a relationship object with a data member. The value of this key represents the linkage the new resource is to have.
 
-			if "relationships" in request_doc["data"]:
-				if not "attributes" in request_doc["data"]:
-					request_doc["data"]["attribites"] = {}
+			if "attributes" in request_doc["data"]:
+				attributes = request_doc["data"]["attributes"]
+			else:
+				attributes = {}
 
+			if "relationships" in request_doc["data"]:
 				for key, data in request_doc["data"]["relationships"].iteritems():
 					assert "id" in data["data"], JsonAPIException("If a relationship is provided in the relationships member of the resource object, its value MUST be a relationship object with a data member.")
-					request_doc["data"]["attributes"][key] = data["data"]["id"]
+					attributes[key] = data["data"]["id"]
 
-			if "attributes" in request_doc["data"]:
-				created = model.create(**request_doc["data"]["attributes"])
+			if "id" in request_doc["data"]:
+				attributes["id"] = request_doc["data"]["id"]
 
-			else:
-				created = model.create()
-
+			created = model.create(**attributes)
 			doc.data = entry_to_resource(created)
 
 		except ValueError:
@@ -47,10 +49,17 @@ def fn_create(model, endpoint):
 					field = field[len(endpoint) + 1 : -3]
 				abort(400, field + " cannot be null")
 
+			if "UNIQUE constraint" in e.message:
+				abort(409, "This id is already taken.")
+
 			abort(400, e)
 
 		except Exception as e:
+			if e.message.startswith("Instance matching query"):
+				abort(400, "Trying to set relationship with non-existant resource.")
+
 			abort(400, e)
 
+		response.set_header("Location", "{}/{}".format(get_endpoint(), get_primary_key(created)))
 		return json.dumps(dict(doc))
 	return jsonp_create

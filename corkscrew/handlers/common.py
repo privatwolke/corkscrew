@@ -41,6 +41,7 @@ def entry_to_resource(entry):
 			attributes[field.name] = attr
 
 	res = JsonAPIResource(primary_key, model_to_endpoint(entry.__class__), attributes = attributes)
+	res.links = { "self": get_endpoint() }
 
 	if len(relationships):
 		res.relationships = relationships

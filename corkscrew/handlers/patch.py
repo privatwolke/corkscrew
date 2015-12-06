@@ -11,8 +11,7 @@ def fn_patch(model, endpoint, relationship = None):
 
 	def jsonp_patch(_id):
 		response.content_type = CONTENT_TYPE
-		response.status = 202
-		doc = JsonAPIResponse()
+		response.status = 204
 
 		try:
 			request_doc = json.loads(request.body.getvalue())
@@ -33,7 +32,7 @@ def fn_patch(model, endpoint, relationship = None):
 					setattr(entry, key, data["data"]["id"])
 
 			entry.save()
-			doc.data = entry_to_resource(entry)
+			return
 
 		except ValueError:
 			abort(400, "Could not parse request document. Be sure to use valid JSON.")
