@@ -33,7 +33,7 @@ def fn_patch(model, endpoint, relationship = None):
 					setattr(entry, key, data["data"]["id"])
 
 			entry.save()
-			doc.data = entry_to_resource(entry, endpoint)
+			doc.data = entry_to_resource(entry)
 
 		except ValueError:
 			abort(400, "Could not parse request document. Be sure to use valid JSON.")
@@ -84,12 +84,12 @@ def fn_patch_relationship(model, relationship):
 					field = field[len(endpoint) + 1 : -3]
 				abort(400, field + " cannot be null")
 
-			abort(400, e.message)
+			abort(400, e)
 
 		except Exception as e:
 			if e.__class__.__name__.endswith("DoesNotExist"):
 				abort(404, "The requested {} resource with id {} does not exist.".format(endpoint, _id))
 
-			abort(400, e.message)
+			abort(400, e)
 
 	return jsonp_patch_relationship

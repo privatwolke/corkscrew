@@ -16,9 +16,11 @@ def fn_get(model, endpoint, relationship = None):
 			entry = model.select().where(model._meta.primary_key == _id).get()
 
 			if relationship:
-				doc.data = entry_to_resource(getattr(entry, relationship), endpoint)
+				rel = getattr(entry, relationship)
+				# non existant relationships must return successful with data: null
+				doc.data = entry_to_resource(rel) if rel else None
 			else:
-				doc.data = entry_to_resource(entry, endpoint)
+				doc.data = entry_to_resource(entry)
 
 			return json.dumps(dict(doc))
 
@@ -27,7 +29,7 @@ def fn_get(model, endpoint, relationship = None):
 				if relationship:
 					doc.data = None
 					return json.dumps(dict(doc))
-				
+
 				abort(404, "The requested {} resource with id {} does not exist.".format(endpoint, _id))
 
 			abort(500, e)

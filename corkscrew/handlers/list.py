@@ -15,11 +15,11 @@ def fn_list(model, endpoint):
 
 		try:
 			for entry in model.select():
-				doc.data.append(entry_to_resource(entry, endpoint))
+				doc.data.append(entry_to_resource(entry))
 
 			return json.dumps(dict(doc), sort_keys = True)
 
 		except Exception as e:
-			abort(500, e.message)
+			abort(500, e)
 
 	return jsonp_list

@@ -35,7 +35,7 @@ def fn_create(model, endpoint):
 			else:
 				created = model.create()
 
-			doc.data = entry_to_resource(created, endpoint)
+			doc.data = entry_to_resource(created)
 
 		except ValueError:
 			abort(400, "Could not parse request document. Be sure to use valid JSON.")
@@ -47,10 +47,10 @@ def fn_create(model, endpoint):
 					field = field[len(endpoint) + 1 : -3]
 				abort(400, field + " cannot be null")
 
-			abort(400, e.message)
+			abort(400, e)
 
 		except Exception as e:
-			abort(400, e.message)
+			abort(400, e)
 
 		return json.dumps(dict(doc))
 	return jsonp_create

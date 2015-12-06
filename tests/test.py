@@ -75,7 +75,7 @@ def validate_jsonapi(doc, is_client_generated = False):
 
 	if "errors" in doc:
 		assert isinstance(doc["errors"], list), "errors: an array of error objects"
-		for errors in doc["errors"]:
+		for error in doc["errors"]:
 			validate_error(error)
 
 
@@ -420,17 +420,50 @@ class TestCorkscrew(unittest.TestSuite):
 		assert result.status == "200 OK"
 		assert result.json
 		validate_jsonapi(result.json)
-		
-		assert result.json["data"] == [{
-			"type": "article",
-			"id": "1",
-			"attributes": {
-				"title": "JSON API paints my bikeshed!"
-			}
-		}, {
-			"type": "article",
-			"id": "2",
-			"attributes": {
-				"title": "Rails is Omakase"
-			}
-		}]
+
+		assert len(result.json["data"]) is 2
+		for entry in result.json["data"]:
+			assert entry["type"] == "article"
+			assert "id" in entry
+			assert isinstance(entry["id"], unicode)
+			assert "attributes" in entry
+			assert "title" in entry["attributes"]
+
+
+	def testFetchingIndividualArticle(self):
+		Article.create(title = "JSON API paints my bikeshed!")
+
+		result = self.app.get("/articles/1")
+		validate_content_type(result.content_type)
+
+		assert result.status == "200 OK"
+		assert result.json
+		validate_jsonapi(result.json)
+
+		assert isinstance(result.json["data"], dict)
+		assert result.json["data"]["id"] == "1"
+		assert result.json["data"]["attributes"]["title"] == "JSON API paints my bikeshed!"
+		assert "relationships" in result.json["data"]
+		assert "author" in result.json["data"]["relationships"]
+		assert result.json["data"]["relationships"]["author"]["links"]["related"]
+
+
+	def testFetchingMissingAuthor(self):
+		Article.create(title = "JSON API paints my bikeshed!")
+		result = self.app.get("/articles/1")
+		rel = result.json["data"]["relationships"]["author"]["links"]["related"]
+
+		result = self.app.get(rel)
+		validate_content_type(result.content_type)
+
+		assert result.status == "200 OK"
+		assert result.json
+		validate_jsonapi(result.json)
+
+		assert result.json["data"] is None
+
+
+	def testFetchingMissingSingleResource(self):
+		result = self.app.get("/article/1", status = 404)
+		assert result.json
+		validate_jsonapi(result.json)

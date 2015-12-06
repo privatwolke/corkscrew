@@ -86,11 +86,11 @@ class JsonAPIRelationships(JsonAPIBase):
 	def __len__(self):
 		return len(self.data)
 
-	def add(self, _id, relation, _type, value):
+	def add(self, relation, _type, value):
 		self.data[relation] = {
 			"links": {
-				"related": "{}/{}/{}".format(self.endpoint, _id, relation),
-				"self": "{}/{}/relationships/{}".format(self.endpoint, _id, relation)
+				"related": "{}/{}".format(self.endpoint, relation),
+				"self": "{}/relationships/{}".format(self.endpoint, relation)
 			}
 		}
 		if _type and value:
