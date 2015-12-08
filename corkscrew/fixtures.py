@@ -45,3 +45,10 @@ class Photos(BaseModel):
 	title = CharField()
 	src = CharField()
 	photographer = ForeignKeyField(People)
+
+
+class Comment(BaseModel):
+	id = PrimaryKeyField()
+	article = ForeignKeyField(Article)
+	body = CharField()
+	author = ForeignKeyField(People)

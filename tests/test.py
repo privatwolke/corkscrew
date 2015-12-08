@@ -2,11 +2,12 @@
 
 import re
 import unittest, warnings
+from pprint import pprint
 from urlparse import urlparse
 from webtest import TestApp
 from peewee import SqliteDatabase
 from corkscrew import BottleApplication
-from corkscrew.fixtures import database, Person, Test, Article, People, Photos
+from corkscrew.fixtures import database, Person, Test, Tag, TestTag, Article, People, Photos, Comment
 
 
 def validate_content_type(content_type):
@@ -170,6 +171,9 @@ def validate_resource_identifier(identifier):
 	assert "type" in identifier, "A 'resource identifier object' MUST contain type and id members."
 	assert "id" in identifier, "A 'resource identifier object' MUST contain type and id members."
 
+	for key in identifier.keys():
+		assert key in ["type", "id"]
+
 
 def validate_error(error):
 	assert isinstance(error, dict), "An error must be an object."
@@ -199,16 +203,17 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def setUp(self):
 		database.initialize(SqliteDatabase(":memory:"))
-		database.create_tables([Person, Test, Article, People, Photos])
+		database.create_tables([Person, Test, Tag, TestTag, Article, People, Photos, Comment])
 		p = Person.create(name = "John Doe")
 		Person.create(name = "Jane Doe")
 		Test.create(value = "First Entry", author = p)
 		Test.create(value = "Second Entry", author = p)
 		app = BottleApplication()
 		app.register(Test)
-		app.register(Article, endpoint = "/articles")
+		app.register(Article, endpoint = "/articles", related = {"comments": Comment})
 		app.register(Photos)
 		app.register(People)
+		app.register(Comment)
 		self.app = TestApp(app)
 
 
@@ -541,4 +546,123 @@ class TestCorkscrew(unittest.TestSuite):
 
 		validate_jsonapi(request)
 		res = self.app.patch_json(update_uri, params = request)
-		print res.body
+		if not "204" in res.status:
+			validate_content_type(res.content_type)
+
+		res = self.app.get("/articles/1")
+		assert res.json["data"]["attributes"]["title"] == "To TDD or Not"
+
+
+	def testUpdatingResourceRelationships(self):
+		a = Person.create(name = "John Doe")
+		b = Person.create(name = "Jane Doe")
+		Article.create(id = 1, title = "Seven Things That Will Make You Go WTF?!", author = a)
+
+		result = self.app.get("/articles/1")
+		request = result.json
+
+		# John Doe is the current author
+		assert result.json["data"]["relationships"]["author"]["data"]["id"] == a.id
+
+		# do not update attributes, server must leave missing attributes unchanged
+		del request["data"]["attributes"]
+
+		# do not update the 'comments' relationship
+		del request["data"]["relationships"]["comments"]
+
+		# change author to Jane Doe
+		request["data"]["relationships"]["author"] = {
+			u"data": {
+				u"id": unicode(b.id),
+				u"type": request["data"]["relationships"]["author"]["data"]["type"]
+			}
+		}
+		validate_jsonapi(request)
+
+		result = self.app.patch_json("/articles/1", params = request)
+		result = self.app.get("/articles/1")
+
+		assert result.json["data"]["relationships"]["author"]["data"]["id"] != a.id
+		assert result.json["data"]["relationships"]["author"]["data"]["id"] == b.id
+		assert result.json["data"]["attributes"]["title"] == "Seven Things That Will Make You Go WTF?!"
+
+
+	def testDeletingIndividualResource(self):
+		Photos.create(id = 1, title = "Test photo", src = "http://example.com/test.png", photographer = People.create())
+
+		result = self.app.get("/photos/1")
+		validate_jsonapi(result.json)
+
+		result = self.app.delete("/photos/1")
+
+		if not result.status_int in [202, 204, 200]:
+			warnings.warn("Delete: A server MAY respond with other HTTP status codes. This code is unknown to the specification.")
+
+		if result.status_int == 200:
+			validate_jsonapi(result.json)
+
+		# the resource should be gone now
+		self.app.get("/photos/1", status = 404)
+
+
+	def testFetchingRelatedOneToNResource(self):
+		a = Article.create(id = 1, title = "Inclusion: The Way Forward?")
+		p = People.create()
+		Comment.create(article = a, body = "Good Stuff!", author = p)
+		Comment.create(article = a, body = "First!", author = p)
+
+		result = self.app.get("/articles/1/comments")
+		validate_jsonapi(result.json)
+
+		for entry in result.json["data"]:
+			assert entry["attributes"]["body"] in ["Good Stuff!", "First!"]
+			assert entry["relationships"]["author"]["data"]["id"] == p.id
+			assert entry["relationships"]["article"]["data"]["id"] == a.id
+
+
+	def testListingRelatedOneToNResource(self):
+		a = Article.create(id = 1, title = "Inclusion: The Way Forward?")
+		p = People.create()
+		Comment.create(article = a, body = "Good Stuff!", author = p)
+		Comment.create(article = a, body = "First!", author = p)
+
+		result = self.app.get("/articles/1/relationships/comments")
+		validate_jsonapi(result.json)
+
+		for entry in result.json["data"]:
+			validate_resource_identifier(entry)
+
+
+	def testPatchingRelatedOneToNResource(self):
+		a = Article.create(id = 1, title = "Inclusion: The Way Forward?")
+		a2 = Article.create(title = "Exclusion: It's A New Thing!")
+		p = People.create()
+		c1 = Comment.create(article = a, body = "Good Stuff!", author = p)
+		c2 = Comment.create(article = a2, body = "First!", author = p)
+
+		result = self.app.get("/articles/1/comments")
+
+		assert len(result.json["data"]) is 1
+		assert result.json["data"][0]["attributes"]["body"] == "Good Stuff!"
+
+		request = {
+			u"data": {
+				u"id": u"1",
+				u"type": u"article",
+				u"relationships": {
+					u"comments": {
+						u"data": [
+							{u"id": unicode(c2.id), u"type": "comment"}
+						]
+					}
+				}
+			}
+		}
+
+		validate_jsonapi(request)
+
+		self.app.patch_json("/articles/1", params = request)
+		result = self.app.get("/articles/1/comments")
+
+		assert len(result.json["data"]) is 1
+		assert result.json["data"][0]["attributes"]["body"] == "First!"

@@ -2,36 +2,32 @@
 
 import json
 from common import *
+from error import ErrorHandler
 from jsonapi import *
-from bottle import response, abort
+from bottle import response
 
 
-def fn_get(model, endpoint, relationship = None):
+def fn_get(model, related = None):
 	foreign_keys = filter(lambda x: isinstance(x, ForeignKeyField), model._meta.sorted_fields)
 
+	@ErrorHandler
+	@ContentType
 	def jsonp_get(_id):
-		response.content_type = CONTENT_TYPE
+		include = request.query.get("include")
 		doc = JsonAPIResponse()
-		try:
-			entry = model.select().where(model._meta.primary_key == _id).get()
+		endpoint = get_endpoint()
 
-			if relationship:
-				rel = getattr(entry, relationship)
-				# non existant relationships must return successful with data: null
-				doc.data = entry_to_resource(rel) if rel else None
-			else:
-				doc.data = entry_to_resource(entry)
+		entry = model.select().where(model._meta.primary_key == _id).get()
 
-			return json.dumps(dict(doc))
+		if include:
+			include = include.split(",")
+			included = [
+				entry_to_resource(getattr(entry, inc)) for inc in include
+			]
 
-		except Exception as e:
-			if e.__class__.__name__.endswith("DoesNotExist"):
-				if relationship:
-					doc.data = None
-					return json.dumps(dict(doc))
+			doc.included = included
 
-				abort(404, "The requested {} resource with id {} does not exist.".format(endpoint, _id))
-
-			abort(500, e)
+		doc.data = entry_to_resource(entry, related = related)
+		return json.dumps(dict(doc))
 
 	return jsonp_get

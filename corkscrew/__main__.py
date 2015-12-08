@@ -16,7 +16,7 @@ if __name__ == "__main__":
 	Article.create(title = "Rails is Omakase")
 
 	app = BottleApplication(base_uri = "http://localhost:8080")
-	app.register(Test, endpoint = "/tests", relationships = [("tags", TestTag)])
+	app.register(Test, endpoint = "/tests")
 	app.register(Person, endpoint = "/people")
 	app.register(Tag, endpoint = "/tags")
 	app.register(Article, endpoint = "/articles")
