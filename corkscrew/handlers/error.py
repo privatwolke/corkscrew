@@ -24,7 +24,7 @@ def ErrorHandler(fn):
 			abort(400, "Could not parse request document. Be sure to use valid JSON.")
 
 		except IntegrityError as e:
-			if e.message.startswith("NOT NULL constraint"):
+			if str(e).startswith("NOT NULL constraint"):
 				field = e.message.split(": ")[1]
 				if field.endswith("_id"):
 					field = field[:-3]
@@ -37,13 +37,13 @@ def ErrorHandler(fn):
 			abort(400, e)
 
 		except AssertionError as e:
-			abort(400, e.message)
+			abort(400, e)
 
 		except Exception as e:
 			if e.__class__.__name__.endswith("DoesNotExist"):
 				abort(404, "The requested resource does not exist.")
 
-			if e.message.startswith("Instance matching query"):
+			if str(e).startswith("Instance matching query"):
 				abort(400, "Trying to set relationship with non-existant resource.")
 
 			# log this unknown error
