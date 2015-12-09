@@ -7,7 +7,7 @@ from jsonapi import *
 from bottle import response, abort
 
 
-def fn_list(model, related = None):
+def fn_list(model, related, endpoints):
 	foreign_keys = filter(lambda x: isinstance(x, ForeignKeyField), model._meta.sorted_fields)
 
 	@ErrorHandler
@@ -16,7 +16,7 @@ def fn_list(model, related = None):
 		doc = JsonAPIResponse()
 
 		for entry in model.select():
-			doc.data.append(entry_to_resource(entry))
+			doc.data.append(entry_to_resource(entry, related, endpoints))
 
 		return json.dumps(dict(doc), sort_keys = True)
 

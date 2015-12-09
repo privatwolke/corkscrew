@@ -8,7 +8,6 @@ from bottle import response
 
 
 def fn_delete(model):
-	endpoint = get_endpoint()
 
 	@ErrorHandler
 	@ContentType

@@ -7,12 +7,11 @@ from jsonapi import *
 from bottle import request, response
 
 
-def fn_patch(model, related):
+def fn_patch(model, related, endpoints):
 
 	@ErrorHandler
-	@ContentType
 	def jsonp_patch(_id):
-		endpoint = get_endpoint()
+		endpoint = endpoints[model]
 		response.status = 204
 
 		request_doc = json.loads(request.body.getvalue())
@@ -29,26 +28,30 @@ def fn_patch(model, related):
 				setattr(entry, key, value)
 
 		if "relationships" in request_doc["data"]:
-			for key, data in request_doc["data"]["relationships"].iteritems():
-				if data:
-					assert "data" in data, JsonAPIException("If a relationship is provided in the relationships member of a resource object in a PATCH request, its value MUST be a relationship object with a data member.")
+			for key, relationship in request_doc["data"]["relationships"].iteritems():
+				assert relationship, JsonAPIException("If a relationship is provided in the relationships member of a resource object in a PATCH request, its value MUST be a relationship object with a data member.")
 
-					if isinstance(data["data"], list) and key in related:
-						reverse_field = get_reverse_field(related[key], model)
+				if isinstance(relationship["data"], list) and key in related:
+					reverse_field = get_reverse_field(related[key], model)
+
+					with related[key]._meta.database.atomic() as txn:
 						# remove all existing links
-						related[key].delete().where(reverse_field == entry).execute()
+						for child_row in related[key].select().where(reverse_field == entry):
+							setattr(child_row, reverse_field.name, None)
+							child_row.save()
 
 						# add new links
-						for linkage in data["data"]:
-							child_row = related[key].select().where(related[key]._meta.primary_key == linkage["id"]).get()
+						for linkage in relationship["data"]:
+							child_row = related[key].select().where(related[key]._meta.primary_key == int(linkage["id"])).get()
 							setattr(child_row, reverse_field.name, entry)
 							child_row.save()
 
-					else:
-						assert "id" in data["data"], JsonAPIException("A 'resource identifier object' MUST contain type and id members.")
-						setattr(entry, key, data["data"]["id"])
-				else:
+				elif relationship["data"] is None:
 					setattr(entry, key, None)
+
+				else:
+					assert "id" in relationship["data"], JsonAPIException("A 'resource identifier object' MUST contain type and id members.")
+					setattr(entry, key, relationship["data"]["id"])
 
 		entry.save()
 

@@ -9,26 +9,25 @@ from bottle import request, response
 
 
 
-def fn_get_relationship(model, relationship, linkage = False):
+def fn_get_relationship(model, relationship, endpoints, linkage = False):
 
 	@ErrorHandler
 	@ContentType
 	def jsonp_get_relationship(_id):
 		doc = JsonAPIResponse()
-		endpoint = get_endpoint()
 
 		entry = model.select().where(model._meta.primary_key == _id).get()
 
 		rel = getattr(entry, relationship)
 		# non existant relationships must return successful with data: null
-		doc.data = entry_to_resource(rel, linkage) if rel else None
+		doc.data = entry_to_resource(rel, [], endpoints, linkage) if rel else None
 
 		return json.dumps(dict(doc))
 
 	return jsonp_get_relationship
 
 
-def fn_get_reverse_relationship(child, parent, linkage = False):
+def fn_get_reverse_relationship(child, parent, endpoints, linkage = False):
 
 	reverse_field = get_reverse_field(child, parent)
 
@@ -36,24 +35,22 @@ def fn_get_reverse_relationship(child, parent, linkage = False):
 	@ContentType
 	def jsonp_get_reverse_relationship(_id):
 		doc = JsonAPIResponse()
-		endpoint = get_endpoint()
 
 		for entry in child.select().where(reverse_field == _id):
-			doc.data.append(entry_to_resource(entry, linkage))
+			doc.data.append(entry_to_resource(entry, [], endpoints, linkage))
 
 		return json.dumps(dict(doc))
 
 	return jsonp_get_reverse_relationship
 
 
-def fn_patch_relationship(model, relationship):
+def fn_patch_relationship(model, relationship, endpoints):
 
 	@ErrorHandler
 	@ContentType
 	def jsonp_patch_relationship(_id):
 		response.status = 204
 		doc = JsonAPIResponse()
-		endpoint = get_endpoint()
 
 		request_doc = json.loads(request.body.getvalue())
 		assert "data" in request_doc, JsonAPIException("The request MUST include a single resource object as primary data.")

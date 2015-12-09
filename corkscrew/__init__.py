@@ -1,3 +1,3 @@
 # coding: utf-8
 
-from application import BottleApplication
+from application import CorkscrewApplication

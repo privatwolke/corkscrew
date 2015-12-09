@@ -10,60 +10,80 @@ def model_to_endpoint(model):
 	return model.__name__.lower()
 
 
-def get_endpoint():
-	return {
-		"full": urljoin(request.urlparts.scheme + "://" + request.urlparts.netloc, request.urlparts.path),
-		"path": request.urlparts.path
-	}
-
-
 def get_primary_key(entry):
 	return getattr(entry, entry.__class__._meta.primary_key.name)
 
 
-def entry_to_resource(entry, linkage = False, related = []):
-	meta = entry.__class__._meta
+def entry_to_resource(entry, related, endpoints, linkage = False):
+	model = entry.__class__
+	meta = model._meta
 	primary_key_field = meta.primary_key
 	primary_key = get_primary_key(entry)
 
 	if linkage:
+		# we only want resource linkage
 		return {
 			u"id": unicode(primary_key),
-			u"type": model_to_endpoint(entry.__class__)
+			u"type": meta.name
 		}
 
+	# prepare the attribute dict and a relationship container
 	attributes = {}
-	relationships = JsonAPIRelationships(get_endpoint()["full"])
+	base_uri = request.urlparts.scheme + "://" + request.urlparts.netloc
+	relationships = JsonAPIRelationships(base_uri)
 
 	for field in meta.sorted_fields:
+		# for each field
+
 		if isinstance(field, ForeignKeyField):
+			# we have a reference to another model, retrieve it
 			obj = getattr(entry, field.name)
+
 			if obj:
-				relationships.add(field.name, obj.__class__._meta.name, get_primary_key(obj))
+				# the reference is not null
+				relationships.add(
+					field.name, # name of the relation
+					endpoints[model], # the current endpoint to generate links
+					entry_to_resource(obj, [], endpoints, linkage = True), # resource linkage
+					primary_key # the current primary key
+				)
+
 			else:
-				relationships.add(field.name)
+				# the reference is null
+				relationships.add(field.name, endpoints[model], None, key = primary_key)
 
 		elif not isinstance(field, PrimaryKeyField):
+			# the field is anything else than a primary key (we keep these out of the attributes dict)
 			attr = getattr(entry, field.name)
 			if isinstance(attr, datetime.date):
+				# handle datetime instances
 				attr = str(attr)
 
+			# save the attribute
 			attributes[field.name] = attr
 
 	if related:
+		# we have 1:n or n:m relations
 		for field, rel in related.iteritems():
 			if isinstance(rel, tuple):
 				rel, via = rel
 
-			relationships.add(field)
+			data = []
 
-	res = JsonAPIResource(primary_key, model_to_endpoint(entry.__class__), attributes = attributes)
-	res.links = { "self": get_endpoint()["full"] }
+			# retrieve the related resources
+			for child_row in rel.select().where(get_reverse_field(rel, model) == primary_key):
+				data.append(dict(entry_to_resource(child_row, [], endpoints, linkage = True)))
+
+			relationships.add(field, endpoints[model], data, key = primary_key)
+
+	# construct a resource object
+	resource = JsonAPIResource(primary_key, meta.name, attributes = attributes)
+	resource.links = { "self": request.url }
 
 	if len(relationships):
-		res.relationships = relationships
+		resource.relationships = relationships
 
-	return res
+	return resource
 
 
 def get_reverse_field(child, parent):

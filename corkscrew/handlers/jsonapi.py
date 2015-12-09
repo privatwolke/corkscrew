@@ -1,5 +1,8 @@
 # coding: utf-8
 
+def urljoin(*parts):
+	return "/".join(part.strip("/") for part in parts)
+
 CONTENT_TYPE = "application/vnd.api+json"
 
 class JsonAPIBase(object):
@@ -79,22 +82,25 @@ class JsonAPIResource(JsonAPIBase):
 
 
 class JsonAPIRelationships(JsonAPIBase):
-	def __init__(self, endpoint):
+	def __init__(self, base_uri):
 		self.data = {}
-		self.endpoint =  endpoint
+		self.base_uri = base_uri
 
 	def __len__(self):
 		return len(self.data)
 
-	def add(self, relation, _type = None, value = None):
-		self.data[relation] = {
+	def __make_links(self, relation, endpoint, key):
+		key = "/" + str(key) if key else ""
+		return {
 			"links": {
-				"related": "{}/{}".format(self.endpoint, relation),
-				"self": "{}/relationships/{}".format(self.endpoint, relation)
+				"related": urljoin(self.base_uri, endpoint, key, relation),
+				"self": urljoin(self.base_uri, endpoint, key, "relationships", relation)
 			}
 		}
-		if _type and value:
-			self.data[relation]["data"] = { "id": value, "type": _type }
+
+	def add(self, relation, endpoint, data, key = None):
+		self.data[relation] = self.__make_links(relation, endpoint, key)
+		self.data[relation]["data"] = data
 
 	def generator(self):
 		for key, value in self.data.iteritems():

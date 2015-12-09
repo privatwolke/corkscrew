@@ -3,30 +3,31 @@
 from bottle import Bottle
 from peewee import ForeignKeyField
 from corkscrew.handlers import *
-from collections import defaultdict
-from urlparse import urljoin
 
-class BottleApplication(Bottle):
 
-	def __init__(self, base_uri = None):
-		self.base_uri = base_uri
-		super(BottleApplication, self).__init__()
+class CorkscrewApplication(Bottle):
 
+	def __init__(self):
+		super(CorkscrewApplication, self).__init__()
+		self.endpoints = {}
 
 	def register(self, model, endpoint = None, related = {}):
 		endpoint = endpoint or "/" + model._meta.name
 
+		# save endpoints for lookup
+		self.endpoints[model] = endpoint
+
 		# GET /{endpoint} -> List resources.
-		self.get(endpoint)(fn_list(model, related))
+		self.get(endpoint)(fn_list(model, related, self.endpoints))
 
 		# GET /{endpoint}/{_id} -> Retrieve individual resource.
-		self.get(endpoint + "/<_id>")(fn_get(model, related))
+		self.get(endpoint + "/<_id>")(fn_get(model, related, self.endpoints))
 
 		# POST /{endpoint} -> Create a new resource.
-		self.post(endpoint)(fn_create(model))
+		self.post(endpoint)(fn_create(model, related, self.endpoints))
 
 		# PATCH /{endpoint}/{_id} -> Patch an individual resource.
-		self.route(endpoint + "/<_id>", "PATCH")(fn_patch(model, related))
+		self.route(endpoint + "/<_id>", "PATCH")(fn_patch(model, related, self.endpoints))
 
 		# DELETE /{endpoint}/{_id} -> Delete an individual resource.
 		self.delete(endpoint + "/<_id>")(fn_delete(model))
@@ -51,16 +52,16 @@ class BottleApplication(Bottle):
 
 	def register_relation(self, endpoint, name, target):
 		ep = "{}/<_id>/{}".format(endpoint, name)
-		self.get(ep)(fn_get_relationship(target, name))
+		self.get(ep)(fn_get_relationship(target, name, self.endpoints))
 
 		ep = "{}/<_id>/relationships/{}".format(endpoint, name)
-		self.get(ep)(fn_get_relationship(target, name, linkage = True))
-		self.route(ep, "PATCH")(fn_patch_relationship(target, name))
+		self.get(ep)(fn_get_relationship(target, name, self.endpoints, linkage = True))
+		self.route(ep, "PATCH")(fn_patch_relationship(target, name, self.endpoints))
 
 
 	def register_reverse_relation(self, endpoint, name, parent, child, via = None):
 		ep = "{}/<_id>/{}".format(endpoint, name)
-		self.get(ep)(fn_get_reverse_relationship(child, parent))
+		self.get(ep)(fn_get_reverse_relationship(child, parent, self.endpoints))
 
 		ep = "{}/<_id>/relationships/{}".format(endpoint, name)
-		self.get(ep)(fn_get_reverse_relationship(child, parent, linkage = True))
+		self.get(ep)(fn_get_reverse_relationship(child, parent, self.endpoints, True))

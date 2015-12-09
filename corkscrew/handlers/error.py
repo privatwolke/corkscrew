@@ -6,7 +6,6 @@ import logging, traceback
 from bottle import abort
 from peewee import IntegrityError
 from jsonapi import JsonAPIResponse, JsonAPIError, CONTENT_TYPE
-from common import get_endpoint
 
 def fn_error(error):
 	error.content_type = CONTENT_TYPE
@@ -28,7 +27,8 @@ def ErrorHandler(fn):
 			if e.message.startswith("NOT NULL constraint"):
 				field = e.message.split(": ")[1]
 				if field.endswith("_id"):
-					field = field[len(get_endpoint()["path"]) + 1 : -3]
+					field = field[:-3]
+
 				abort(400, field + " cannot be null")
 
 			if "UNIQUE constraint" in e.message:
@@ -41,7 +41,7 @@ def ErrorHandler(fn):
 
 		except Exception as e:
 			if e.__class__.__name__.endswith("DoesNotExist"):
-				abort(404, "The requested resource {} does not exist.".format(get_endpoint()["path"]))
+				abort(404, "The requested resource does not exist.")
 
 			if e.message.startswith("Instance matching query"):
 				abort(400, "Trying to set relationship with non-existant resource.")

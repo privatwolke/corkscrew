@@ -7,7 +7,7 @@ from jsonapi import *
 from bottle import response
 
 
-def fn_get(model, related = None):
+def fn_get(model, related, endpoints):
 	foreign_keys = filter(lambda x: isinstance(x, ForeignKeyField), model._meta.sorted_fields)
 
 	@ErrorHandler
@@ -15,7 +15,6 @@ def fn_get(model, related = None):
 	def jsonp_get(_id):
 		include = request.query.get("include")
 		doc = JsonAPIResponse()
-		endpoint = get_endpoint()
 
 		entry = model.select().where(model._meta.primary_key == _id).get()
 
@@ -27,7 +26,7 @@ def fn_get(model, related = None):
 
 			doc.included = included
 
-		doc.data = entry_to_resource(entry, related = related)
+		doc.data = entry_to_resource(entry, related, endpoints)
 		return json.dumps(dict(doc))
 
 	return jsonp_get
