@@ -3,9 +3,9 @@
 import sys
 import json
 import logging, traceback
-from bottle import abort
+from bottle import abort, response
 from peewee import IntegrityError
-from jsonapi import JsonAPIResponse, JsonAPIError, CONTENT_TYPE
+from corkscrew.jsonapi import JsonAPIResponse, JsonAPIError, CONTENT_TYPE
 
 def fn_error(error):
 	error.content_type = CONTENT_TYPE
@@ -17,6 +17,8 @@ def fn_error(error):
 
 def ErrorHandler(fn):
 	def outer(*args, **kwargs):
+		response.content_type = CONTENT_TYPE
+
 		try:
 			return fn(*args, **kwargs)
 
@@ -31,7 +33,7 @@ def ErrorHandler(fn):
 
 				abort(400, field + " cannot be null")
 
-			if "UNIQUE constraint" in e.message:
+			if "UNIQUE constraint" in str(e):
 				abort(409, "This id is already taken.")
 
 			abort(400, e)

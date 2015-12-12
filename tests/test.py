@@ -4,10 +4,11 @@ import unittest, warnings
 from pprint import pprint
 from webtest import TestApp
 from peewee import SqliteDatabase
-from corkscrew import CorkscrewApplication
-from corkscrew.fixtures import *
 
-from validator import *
+from corkscrew import CorkscrewApplication
+from corkscrew.handlers import PeeweeHandlerFactory as PHF
+from corkscrew.fixtures import *
+from corkscrew.jsonapi import JsonAPIValidator
 
 
 class TestCorkscrew(unittest.TestSuite):
@@ -17,16 +18,18 @@ class TestCorkscrew(unittest.TestSuite):
 		insertFixtures()
 
 		app = CorkscrewApplication()
-		app.register(Tag,     endpoint = "/tags")
-		app.register(Comment, endpoint = "/comments")
-		app.register(Person,  endpoint = "/people")
+		app.register(PHF(Tag),     endpoint = "/tags")
+		app.register(PHF(Comment), endpoint = "/comments")
+		app.register(PHF(Person),  endpoint = "/people")
 
-		app.register(Photo,   endpoint = "/photos", related = {
-			"tags": (Tag, PhotoTag)
-		})
-		app.register(Article, endpoint = "/articles", related = {
-			"comments": Comment
-		})
+		app.register(
+			PHF(Photo, related = {"tags": (Tag, PhotoTag)}),
+			endpoint = "/photos"
+		)
+		app.register(
+			PHF(Article, related = {"comments": Comment}),
+			endpoint = "/articles"
+		)
 
 		self.app = TestApp(app)
 
@@ -35,14 +38,18 @@ class TestCorkscrew(unittest.TestSuite):
 		database.close()
 
 
+	def testListTags(self):
+		result = self.app.get("/tags")
+
+
 	def testList(self):
 		result = self.app.get("/articles")
 		assert result.status == "200 OK"
 
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 		assert result.json
 
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert "data" in result.json
 		assert len(result.json["data"]) is len(ARTICLE_TITLES)
@@ -67,7 +74,7 @@ class TestCorkscrew(unittest.TestSuite):
 		assert result.status == "200 OK"
 		assert result.json
 
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert "data" in result.json
 
@@ -104,14 +111,14 @@ class TestCorkscrew(unittest.TestSuite):
 			}
 		}
 
-		validate_jsonapi(request, True)
+		JsonAPIValidator.validate_jsonapi(request, True)
 
 		result = self.app.post_json("/articles", params = request)
 		assert result.status == "200 OK"
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert "relationships" in result.json["data"]
 
@@ -133,7 +140,7 @@ class TestCorkscrew(unittest.TestSuite):
 			}
 		}
 
-		validate_jsonapi(request)
+		JsonAPIValidator.validate_jsonapi(request)
 
 		result = self.app.patch_json("/articles/1", params = request)
 		assert result.status == "202 Accepted" or result.status == "200 OK" or result.status == "204 No Content"
@@ -142,10 +149,10 @@ class TestCorkscrew(unittest.TestSuite):
 			# nothing more to test
 			return
 
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert result.json["data"]["attributes"]["title"] == "Changed First Entry"
 
@@ -158,17 +165,17 @@ class TestCorkscrew(unittest.TestSuite):
 	def testGetRelated(self):
 		result = self.app.get("/articles/1")
 		assert result.status == "200 OK"
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		result = self.app.get(result.json["data"]["relationships"]["author"]["links"]["related"])
 		assert result.status == "200 OK"
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert "data" in result.json
 		assert type(result.json["data"]) == type({})
@@ -179,17 +186,17 @@ class TestCorkscrew(unittest.TestSuite):
 	def testGetRelationship(self):
 		result = self.app.get("/articles/1")
 		assert result.status == "200 OK"
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		result = self.app.get(result.json["data"]["relationships"]["author"]["links"]["self"])
 		assert result.status == "200 OK"
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert "data" in result.json
 		assert isinstance(result.json["data"], dict)
@@ -200,10 +207,10 @@ class TestCorkscrew(unittest.TestSuite):
 	def testPatchRelationship(self):
 		result = self.app.get("/articles/1")
 		assert result.status == "200 OK"
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		relation = result.json["data"]["relationships"]["author"]["links"]["self"]
 
@@ -211,7 +218,7 @@ class TestCorkscrew(unittest.TestSuite):
 			u"data": { u"type": u"person", u"id": u"2" }
 		}
 
-		validate_jsonapi(request)
+		JsonAPIValidator.validate_jsonapi(request)
 
 		result = self.app.patch_json(relation, params = request)
 		assert result.status in ["200 OK", "202 Accepted", "204 No Content"]
@@ -224,10 +231,10 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def testFetchingDataCollection(self):
 		result = self.app.get("/articles")
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.status == "200 OK"
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert len(result.json["data"]) is 2
 		for entry in result.json["data"]:
@@ -237,11 +244,11 @@ class TestCorkscrew(unittest.TestSuite):
 
 		Article.delete().where(True).execute()
 		result = self.app.get("/articles")
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.status == "200 OK"
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert len(result.json["data"]) is 0
 
@@ -251,11 +258,11 @@ class TestCorkscrew(unittest.TestSuite):
 		rel = result.json["data"]["relationships"]["cover"]["links"]["related"]
 
 		result = self.app.get(rel)
-		validate_content_type(result.content_type)
+		JsonAPIValidator.validate_content_type(result.content_type)
 
 		assert result.status == "200 OK"
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		assert result.json["data"] is None
 
@@ -263,7 +270,7 @@ class TestCorkscrew(unittest.TestSuite):
 	def testFetchingMissingSingleResource(self):
 		result = self.app.get("/article/1337", status = 404)
 		assert result.json
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 
 	def testCreatingResourceWithReferences(self):
@@ -282,11 +289,11 @@ class TestCorkscrew(unittest.TestSuite):
 			}
 		}
 
-		validate_jsonapi(request, True)
+		JsonAPIValidator.validate_jsonapi(request, True)
 
 		result = self.app.post_json("/photos", params = request)
-		validate_content_type(result.content_type)
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_content_type(result.content_type)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		if not result.location:
 			warnings.warn("The response SHOULD include a Location header identifying the location of the newly created resource.")
@@ -294,7 +301,7 @@ class TestCorkscrew(unittest.TestSuite):
 		else:
 			res = self.app.get(result.location)
 			assert res.json
-			validate_jsonapi(res.json)
+			JsonAPIValidator.validate_jsonapi(res.json)
 
 
 	def testCreateResourceWithAlreadyExistingId(self):
@@ -308,11 +315,11 @@ class TestCorkscrew(unittest.TestSuite):
 			}
 		}
 
-		validate_jsonapi(request)
+		JsonAPIValidator.validate_jsonapi(request)
 
 		# expect this to fail
 		result = self.app.post_json("/people", params = request, status = 409)
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 
 	def testUpdatingResourceViaSelfLink(self):
@@ -331,11 +338,11 @@ class TestCorkscrew(unittest.TestSuite):
 			}
 		}
 
-		validate_jsonapi(request)
+		JsonAPIValidator.validate_jsonapi(request)
 		res = self.app.patch_json(update_uri, params = request)
 
 		if not "204" in res.status:
-			validate_content_type(res.content_type)
+			JsonAPIValidator.validate_content_type(res.content_type)
 
 		res = self.app.get("/articles/1")
 		assert res.json["data"]["attributes"]["title"] == UPDATE_TITLE
@@ -362,7 +369,7 @@ class TestCorkscrew(unittest.TestSuite):
 				u"type": request["data"]["relationships"]["author"]["data"]["type"]
 			}
 		}
-		validate_jsonapi(request)
+		JsonAPIValidator.validate_jsonapi(request)
 
 		result = self.app.patch_json("/articles/1", params = request)
 		result = self.app.get("/articles/1")
@@ -374,7 +381,7 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def testDeletingIndividualResource(self):
 		result = self.app.get("/photos/1")
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		result = self.app.delete("/photos/1")
 
@@ -382,7 +389,7 @@ class TestCorkscrew(unittest.TestSuite):
 			warnings.warn("Delete: A server MAY respond with other HTTP status codes. This code is unknown to the specification.")
 
 		if result.status_int == 200:
-			validate_jsonapi(result.json)
+			JsonAPIValidator.validate_jsonapi(result.json)
 
 		# the resource should be gone now
 		self.app.get("/photos/1", status = 404)
@@ -390,7 +397,7 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def testFetchingRelatedOneToNResource(self):
 		result = self.app.get("/articles/1/comments")
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		for entry in result.json["data"]:
 			assert entry["attributes"]["body"] in COMMENT_BODIES
@@ -400,10 +407,10 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def testListingRelatedOneToNResource(self):
 		result = self.app.get("/articles/1/relationships/comments")
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 
 		for entry in result.json["data"]:
-			validate_resource_identifier(entry)
+			JsonAPIValidator.validate_resource_identifier(entry)
 
 
 	def testPatchingRelatedOneToNResourceShouldFail(self):
@@ -428,10 +435,10 @@ class TestCorkscrew(unittest.TestSuite):
 			}
 		}
 
-		validate_jsonapi(request)
+		JsonAPIValidator.validate_jsonapi(request)
 
 		result = self.app.patch_json("/articles/1", params = request, status = 400)
-		validate_jsonapi(result.json)
+		JsonAPIValidator.validate_jsonapi(result.json)
 		assert "cannot be null" in result.json["errors"][0]["title"]
 
 
@@ -451,7 +458,7 @@ class TestCorkscrew(unittest.TestSuite):
 			}
 		}
 
-		validate_jsonapi(request)
+		JsonAPIValidator.validate_jsonapi(request)
 
 		result = self.app.patch_json("/articles/2", params = request)
 

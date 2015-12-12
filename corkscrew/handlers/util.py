@@ -4,7 +4,7 @@ import datetime
 from bottle import request, response
 from urlparse import urljoin
 from peewee import ForeignKeyField, PrimaryKeyField
-from jsonapi import JsonAPIResource, JsonAPIRelationships, CONTENT_TYPE
+from corkscrew.jsonapi import JsonAPIResource, JsonAPIRelationships, CONTENT_TYPE
 
 def model_to_endpoint(model):
 	return model.__name__.lower()
