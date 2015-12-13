@@ -17,17 +17,19 @@ class TestCorkscrew(unittest.TestSuite):
 		database.initialize(SqliteDatabase(":memory:"))
 		insertFixtures()
 
-		app = CorkscrewApplication()
-		app.register(PHF(Tag),     endpoint = "/tags")
-		app.register(PHF(Comment), endpoint = "/comments")
-		app.register(PHF(Person),  endpoint = "/people")
+		app = CorkscrewApplication(PHF)
+		app.register(Tag,     endpoint = "/tags")
+		app.register(Comment, endpoint = "/comments")
+		app.register(Person,  endpoint = "/people")
 
 		app.register(
-			PHF(Photo, related = {"tags": (Tag, PhotoTag)}),
+			Photo,
+			related = { "tags": (Tag, PhotoTag) },
 			endpoint = "/photos"
 		)
 		app.register(
-			PHF(Article, related = {"comments": Comment}),
+			Article,
+			related = { "comments": Comment },
 			endpoint = "/articles"
 		)
 

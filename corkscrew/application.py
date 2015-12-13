@@ -31,14 +31,19 @@ class CorkscrewApplicationContext(object):
 
 class CorkscrewApplication(Bottle):
 
-	def __init__(self):
+	def __init__(self, handler_factory):
 		super(CorkscrewApplication, self).__init__()
+		
+		self.handler_factory = handler_factory
 		self.context = CorkscrewApplicationContext(self)
+
+		# setup default error handling
 		self.error_handler = { x: fn_error for x in xrange(400, 601) }
 
 
-	def register(self, factory, endpoint = None):
-		endpoint = endpoint or "/" + factory.model._meta.name
+	def register(self, model, related = {}, endpoint = None):
+		endpoint = endpoint or "/" + model._meta.name
+		factory = self.handler_factory(model, related)
 
 		self.context.add_factory(factory, endpoint)
 		factory.context = self.context

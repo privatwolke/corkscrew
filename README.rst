@@ -18,6 +18,7 @@ Usage
 .. code:: python
 
     from corkscrew import BottleApplication
+    from corkscrew.handlers import PeeweeHandlerFactory as PHF
     from peewee import Model, PrimaryKeyField, CharField, SqliteDatabase
 
     class Friends(Model):
@@ -29,7 +30,7 @@ Usage
 
     Friends.create_table()
 
-    application = BottleApplication()
+    application = BottleApplication(PHF)
     application.register(Friends)
 
     if __name__ == "__main__":
