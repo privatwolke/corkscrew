@@ -464,3 +464,74 @@ class TestCorkscrew(unittest.TestSuite):
 
 		result = self.app.get("/articles/2/cover")
 		assert result.json["data"] is None
+
+
+	def testGetNToMRelationship(self):
+		result = self.app.get("/photos/1/tags")
+		JsonAPIValidator.validate(result.json)
+
+		assert len(result.json["data"]) is 2
+
+		for tag in result.json["data"]:
+			assert tag["attributes"]["name"] in TAG_NAMES
+
+
+	def testValidateNoRelationships(self):
+		result = self.app.get("/people")
+
+		# Person has no relationships
+		for entry in result.json["data"]:
+			assert not "relationships" in entry
+
+
+	def testValidateForwardRelationship(self):
+		result = self.app.get("/photos")
+		# Photo has a forward relationship to Person (photographer)
+		for entry in result.json["data"]:
+			assert "relationships" in entry
+			for name, relationship in entry["relationships"].iteritems():
+				assert name in ["photographer", "tags"]
+
+			relationship = entry["relationships"]["photographer"]
+			data = relationship["data"]
+
+			# retrieve the /relationships link
+			subresult = self.app.get(relationship["links"]["self"])
+			assert subresult.json["data"] == data
+
+			# retrieve the related object
+			subresult = self.app.get(relationship["links"]["related"])
+
+			# type and id must match
+			assert subresult.json["data"]["id"] == data["id"]
+			assert subresult.json["data"]["type"] == data["type"]
+
+			# retrieve the related object's self link and ensure that it is the same object
+			subsubresult = self.app.get(subresult.json["data"]["links"]["self"])
+			assert subresult.json == subsubresult.json
+
+
+	def testValidateReverseRelationships(self):
+		result = self.app.get("/photos")
+		# Photo has a reverse relationship to Tag (tags, via PhotoTag)
+		for entry in result.json["data"]:
+			assert "relationships" in entry
+			for name, relationship in entry["relationships"].iteritems():
+				assert name in ["photographer", "tags"]
+
+			relationship = entry["relationships"]["tags"]
+			data = relationship["data"]
+
+			# retrieve the /relationships link
+			subresult = self.app.get(relationship["links"]["self"])
+			assert subresult.json["data"] == data
+
+			# retrieve the related objects
+			subresult = self.app.get(relationship["links"]["related"])
+
+			# type and id must match
+			for subentry in subresult.json["data"]:
+				assert {"id": subentry["id"], "type": subentry["type"]} in data
+
+				subsubresult = self.app.get(subentry["links"]["self"])
+				assert subentry == subsubresult.json["data"]

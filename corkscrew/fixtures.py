@@ -66,7 +66,10 @@ COMMENT_BODIES = [
 	"You, Sir, WIN the Internet."
 ]
 
-TAG_NAME = "example"
+TAG_NAMES = [
+	"example",
+	"hashtag"
+]
 
 
 def insertFixtures():
@@ -104,5 +107,7 @@ def insertFixtures():
 		author  = person2
 	)
 
-	tag1 = Tag.create(name = TAG_NAME)
+	tag1 = Tag.create(name = TAG_NAMES[0])
+	tag2 = Tag.create(name = TAG_NAMES[1])
 	PhotoTag.create(tag = tag1, photo = photo)
+	PhotoTag.create(tag = tag2, photo = photo)

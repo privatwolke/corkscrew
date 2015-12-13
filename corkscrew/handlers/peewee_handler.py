@@ -28,13 +28,13 @@ class PeeweeHandlerFactory(object):
 		self.model = model
 		self.related = related
 		self.listener = listener
-		self.endpoints = {}
+		self.context = None
 
 
-	def entry_to_resource(self, entry, related = None, linkage = False):
+	def entry_to_resource(self, entry, linkage = False):
 		"""Formats a peewee database row as a JsonAPIResource."""
 
-		return entry_to_resource(entry, related or self.related, self.endpoints, linkage)
+		return entry_to_resource(entry, self.context, linkage)
 
 
 	def get_reverse_field(self, target):
@@ -124,7 +124,6 @@ class PeeweeHandlerFactory(object):
 			# non existant relationships must return successful with data: null
 			response_doc.data = self.entry_to_resource(
 				relation,
-				related = {},
 				linkage = linkage
 			) if relation else None
 
@@ -133,19 +132,31 @@ class PeeweeHandlerFactory(object):
 		return fn_get_relationship
 
 
-	def get_reverse_relationship(self, target, linkage = False):
+	def get_reverse_relationship(self, target, via, linkage = False):
 		"""Returns a function that retrieves or lists a reverse relationship."""
 
-		reverse_field = self.get_reverse_field(target)
+		reverse_field = self.get_reverse_field(via or target)
+
+		if not reverse_field:
+			raise Exception("There is no reverse field for this relationship: " + str(self.model) + " -> " + str(target))
 
 		@ErrorHandler
 		def fn_get_reverse_relationship(_id):
 			"""Returns either listing of the reverse relationship or the data itself."""
 
 			response_doc = JsonAPIResponse()
-			for entry in target.select().where(reverse_field == _id):
+
+			if via:
+				query = target.select().join(via).where(reverse_field == _id)
+			else:
+				query = target.select().where(reverse_field == _id)
+
+			for entry in query:
 				response_doc.data.append(
-					self.entry_to_resource(entry, related = {}, linkage = linkage)
+					self.entry_to_resource(
+						entry,
+						linkage = linkage
+					)
 				)
 
 			return json.dumps(dict(response_doc))

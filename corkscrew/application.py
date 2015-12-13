@@ -5,19 +5,43 @@ from peewee import ForeignKeyField
 from corkscrew.handlers import *
 
 
+class CorkscrewApplicationContext(object):
+
+	def __init__(self, app):
+		self.app = app
+		self.endpoints = {}
+		self.factories = {}
+
+	def get_factory(self, model):
+		return self.factories[model] if model in self.factories else None
+
+	def get_endpoint(self, factory_or_model):
+		try:
+			return self.endpoints[factory_or_model]
+		except KeyError:
+			try:
+				return self.endpoints[self.get_factory(factory_or_model)]
+			except KeyError:
+				return None
+
+	def add_factory(self, factory, endpoint):
+		self.factories[factory.model] = factory
+		self.endpoints[factory] = endpoint
+
+
 class CorkscrewApplication(Bottle):
 
 	def __init__(self):
 		super(CorkscrewApplication, self).__init__()
-		self.endpoints = {}
+		self.context = CorkscrewApplicationContext(self)
 		self.error_handler = { x: fn_error for x in xrange(400, 601) }
 
 
 	def register(self, factory, endpoint = None):
 		endpoint = endpoint or "/" + factory.model._meta.name
 
-		self.endpoints[factory.model] = endpoint
-		factory.endpoints = self.endpoints
+		self.context.add_factory(factory, endpoint)
+		factory.context = self.context
 
 		self.get(endpoint)(factory.list())
 		self.get(endpoint + "/<_id>")(factory.get())
@@ -54,7 +78,7 @@ class CorkscrewApplication(Bottle):
 
 	def register_reverse_relation(self, factory, name, endpoint, target, via = None):
 		ep = "{}/<_id>/{}".format(endpoint, name)
-		self.get(ep)(factory.get_reverse_relationship(target))
+		self.get(ep)(factory.get_reverse_relationship(target, via))
 
 		ep = "{}/<_id>/relationships/{}".format(endpoint, name)
-		self.get(ep)(factory.get_reverse_relationship(target, linkage = True))
+		self.get(ep)(factory.get_reverse_relationship(target, via, linkage = True))

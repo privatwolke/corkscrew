@@ -14,7 +14,7 @@ def get_primary_key(entry):
 	return getattr(entry, entry.__class__._meta.primary_key.name)
 
 
-def entry_to_resource(entry, related, endpoints, linkage = False):
+def entry_to_resource(entry, context, linkage = False):
 	model = entry.__class__
 	meta = model._meta
 	primary_key_field = meta.primary_key
@@ -43,14 +43,14 @@ def entry_to_resource(entry, related, endpoints, linkage = False):
 				# the reference is not null
 				relationships.add(
 					field.name, # name of the relation
-					endpoints[model], # the current endpoint to generate links
-					entry_to_resource(obj, [], endpoints, linkage = True), # resource linkage
+					context.get_endpoint(model), # the current endpoint to generate links
+					entry_to_resource(obj, context, linkage = True), # resource linkage
 					primary_key # the current primary key
 				)
 
 			else:
 				# the reference is null
-				relationships.add(field.name, endpoints[model], None, key = primary_key)
+				relationships.add(field.name, context.get_endpoint(model), None, key = primary_key)
 
 		elif not isinstance(field, PrimaryKeyField):
 			# the field is anything else than a primary key (we keep these out of the attributes dict)
@@ -62,23 +62,50 @@ def entry_to_resource(entry, related, endpoints, linkage = False):
 			# save the attribute
 			attributes[field.name] = attr
 
-	if related:
+	if context.get_factory(model).related:
 		# we have 1:n or n:m relations
-		for field, rel in related.iteritems():
+		for field, rel in context.get_factory(model).related.iteritems():
+			via = None
+
 			if isinstance(rel, tuple):
 				rel, via = rel
 
 			data = []
 
-			# retrieve the related resources
-			for child_row in rel.select().where(get_reverse_field(rel, model) == primary_key):
-				data.append(dict(entry_to_resource(child_row, [], endpoints, linkage = True)))
+			if via:
+				query = rel.select().join(via).where(
+					get_reverse_field(via, model) == primary_key
+				)
+			else:
+				query = rel.select().where(
+					get_reverse_field(rel, model) == primary_key
+				)
 
-			relationships.add(field, endpoints[model], data, key = primary_key)
+			# retrieve the related resources
+			for child_row in query:
+				data.append(
+					dict(entry_to_resource(child_row, context, linkage = True))
+				)
+
+			relationships.add(
+				field,
+				context.get_endpoint(model),
+				data,
+				key = primary_key
+			)
 
 	# construct a resource object
 	resource = JsonAPIResource(primary_key, meta.name, attributes = attributes)
-	resource.links = { "self": request.url }
+
+	# format self link
+	resource.links = {
+		"self": "{}://{}{}/{}".format(
+			request.urlparts.scheme,
+			request.urlparts.netloc,
+			context.get_endpoint(model),
+			primary_key
+		)
+	}
 
 	if len(relationships):
 		resource.relationships = relationships
