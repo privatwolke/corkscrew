@@ -1,11 +1,16 @@
+# coding: utf-8
+
 import re, warnings
 from urlparse import urlparse
 from corkscrew.jsonapi import JsonAPIException
 
 class JsonAPIValidator(object):
+	"""A collection of functions that validates JsonAPI structures."""
 
 	@staticmethod
 	def validate(doc, is_client_generated = False):
+		"""The main entry point for validating complete and generic structures."""
+
 		try:
 			JsonAPIValidator.validate_jsonapi(doc, is_client_generated)
 
@@ -15,7 +20,12 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_create(doc, _type):
+		"""Validates a JsonAPI structure that can be used for creating a new resource."""
+
+		# first, let's make sure that the overall format is correct
 		JsonAPIValidator.validate(doc, is_client_generated = True)
+
+		# also, make sure that these stricter requirements are also met
 
 		if not "data" in doc:
 			raise JsonAPIException("The request MUST include a single resource object as primary data.")
@@ -37,7 +47,12 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_patch(doc, _id, _type):
+		"""Validates a JsonAPI structure that can be used for patching a resource."""
+
+		# first, let's make sure that the overall format is correct
 		JsonAPIValidator.validate(doc)
+
+		# also, make sure that these stricter requirements are also met
 
 		if not "data" in doc:
 			raise JsonAPIException("The request MUST include a single resource object as primary data.")
@@ -60,11 +75,15 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_content_type(content_type):
+		"""Validates the Content-Type of a response."""
+
 		assert content_type == "application/vnd.api+json", "Servers MUST send all JSON API data in response documents with the header Content-Type: application/vnd.api+json without any media type parameters."
 
 
 	@staticmethod
 	def validate_member_names(doc):
+		"""Validates the characters used in member names against the JsonAPI specification."""
+
 		for key, value in doc.iteritems():
 			assert len(key) > 0, "Member names MUST contain at least one character."
 			assert re.match(r"^[0-9A-Za-z]$", key[0]) or ord(unicode(key[0])) > 0x7F, "Member names MUST start with a 'globally allowed character'."
@@ -81,6 +100,8 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_jsonapi(doc, is_client_generated = False):
+		"""Validates the root level of a JsonAPI structure."""
+
 		assert isinstance(doc, dict), "A JSON object MUST be at the root of every JSON API request and response containing data."
 		JsonAPIValidator.validate_member_names(doc)
 
@@ -133,6 +154,8 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_links(links):
+		"""Validates a links object."""
+
 		assert isinstance(links, dict), "The value of each links member MUST be an object (a 'links object')."
 		for key, link in links.iteritems():
 			assert isinstance(link, unicode) or isinstance(link, dict), "A link MUST be represented as either: unicode, dict."
@@ -148,6 +171,8 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_resource(resource, is_client_generated = False):
+		"""Validates a resource object."""
+
 		assert isinstance(resource, dict), "A resource object must be of type dict."
 		assert "type" in resource, "A resource object MUST contain at least the following top-level member: type."
 		assert isinstance(resource["type"], unicode), "The value of the type member MUST be a unicode."
@@ -177,12 +202,16 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_attributes_relationships(attributes, relationships):
+		"""Validates that the attributes and relationships members don't use overlapping names."""
+
 		for key in attributes.keys():
 			assert not key in relationships, "Fields for a resource object MUST share a common namespace with each other."
 
 
 	@staticmethod
 	def validate_attributes(attributes):
+		"""Validates an attributes object."""
+
 		assert isinstance(attributes, dict), "The value of the attributes key MUST be an object (an 'attributes object')."
 
 		for key, value in attributes.iteritems():
@@ -199,6 +228,8 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_relationships(relationships):
+		"""Validates a relationships object."""
+
 		assert isinstance(relationships, dict), "The value of the relationships key MUST be an object (a 'relationships object')."
 
 		for key, relationship in relationships.iteritems():
@@ -224,6 +255,8 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_resource_identifier(identifier):
+		"""Validates a resource identifier object."""
+
 		assert isinstance(identifier, dict), "A 'resource identifier object' is an object that identifies an individual resource."
 		assert "type" in identifier, "A 'resource identifier object' MUST contain type and id members."
 		assert "id" in identifier, "A 'resource identifier object' MUST contain type and id members."
@@ -234,6 +267,8 @@ class JsonAPIValidator(object):
 
 	@staticmethod
 	def validate_error(error):
+		"""Validates an error object."""
+
 		assert isinstance(error, dict), "An error must be an object."
 
 		for key in error.keys():

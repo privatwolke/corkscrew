@@ -8,6 +8,7 @@ from corkscrew.jsonapi import JsonAPIValidator, JsonAPIResponse
 from corkscrew.handlers.util import entry_to_resource, get_primary_key
 from corkscrew.handlers import ErrorHandler, Listener
 
+
 class PeeweeHandlerFactory(object):
 	"""A Factory of Handlers for peewee models.
 
@@ -204,7 +205,11 @@ class PeeweeHandlerFactory(object):
 		return fn_patch_relationship
 
 
-	def fn_patch_relationships(self, _id, relationships):
+	def __patch_relationships(self, _id, relationships):
+		"""Works through a data.relationships object and patches the given
+		relationships in the data store.
+		"""
+
 		entry = self.model.select().where(
 			self.model._meta.primary_key == _id
 		).get()
@@ -243,15 +248,19 @@ class PeeweeHandlerFactory(object):
 				setattr(entry, key, relationship["data"]["id"])
 
 			else:
+				# we should not encounter a non existant field
 				raise JsonAPIException("Encountered unknown relationship field: '{}'.".format(key))
 
 		entry.save()
 
 
 	def patch(self):
+		"""Returns a function that handles a PATCH request to a resource."""
 
 		@ErrorHandler
 		def fn_patch(_id, request_doc = None):
+			"""Handles PATCH requests to the given resource."""
+
 			request_doc = request_doc or json.loads(request.body.getvalue())
 			JsonAPIValidator.validate_patch(request_doc, _id, self.model._meta.name)
 
@@ -262,27 +271,34 @@ class PeeweeHandlerFactory(object):
 			).get()
 
 			if "attributes" in request_doc["data"]:
+				# each attribute that is present will be updated
 				for key, value in request_doc["data"]["attributes"].iteritems():
 					setattr(entry, key, value)
 
 				entry.save()
 
 			if "relationships" in request_doc["data"]:
-				self.fn_patch_relationships(_id, request_doc["data"]["relationships"])
+				# patch given relationships
+				self.__patch_relationships(_id, request_doc["data"]["relationships"])
 
 			if self.listener.after_patch(response):
+				# if the listener changed something else then return the object
 				return self.get()(_id)
 
 			else:
+				# nothing changed, we return a 204 No Content status
 				response.status = 204
 
 		return fn_patch
 
 
 	def delete(self):
+		"""Returns a function that handles DELETE requests."""
 
 		@ErrorHandler
 		def fn_delete(_id):
+			"""Deletes a resource."""
+
 			self.listener.before_delete(_id)
 
 			entry = self.model.select().where(
@@ -292,6 +308,8 @@ class PeeweeHandlerFactory(object):
 			entry.delete_instance()
 
 			self.listener.after_delete(_id)
+
+			# return a 204 No Content status
 			response.status = 204
 
 		return fn_delete

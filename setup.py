@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from setuptools import setup
+from setuptools import setup, find_packages
 from io import open
 
 version = '0.0.1'
@@ -13,7 +13,7 @@ setup(name = 'corkscrew',
 	author = 'Stephan Klein',
 	url = 'https://github.com/privatwolke/corkscrew',
 	license = 'MIT',
-	packages = ['corkscrew', 'corkscrew.handlers'],
+	packages = find_packages(),
 	install_requires = ['bottle', 'peewee'],
 	extras_require = {
 		"testing": ['webtest', 'nose']
