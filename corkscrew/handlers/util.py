@@ -4,7 +4,7 @@ import datetime
 from bottle import request, response
 from urlparse import urljoin
 from peewee import ForeignKeyField, PrimaryKeyField
-from corkscrew.jsonapi import JsonAPIResource, JsonAPIRelationships, CONTENT_TYPE
+from corkscrew.jsonapi import JsonAPIResource, JsonAPIRelationships, JsonAPIException
 
 def model_to_endpoint(model):
 	return model.__name__.lower()
@@ -14,21 +14,48 @@ def get_primary_key(entry):
 	return getattr(entry, entry.__class__._meta.primary_key.name)
 
 
-def entry_to_resource(entry, context, linkage = False):
+def include_is_valid(include, entry, factory):
+	related = factory.related if factory else {}
+
+	for inc in include:
+		if list(set(inc.split("."))) != inc.split("."):
+			raise JsonAPIException("Circular include field specification detected.", status = 400)
+
+		if len(inc):
+			field = inc.split(".")[0]
+			if not (hasattr(entry, field) or field in related.keys()):
+				raise JsonAPIException("Unknown field to be included: " + field, status = 400)
+
+
+def include_matches(include, field):
+	matches = []
+	for inc in include:
+		if inc.startswith(field):
+			matches.append(inc[len(field) + 1:])
+
+	return matches
+
+
+def entry_to_resource(entry, context, include = [], linkage = False):
+	factory = context.get_factory(entry.__class__)
 	model = entry.__class__
 	meta = model._meta
 	primary_key_field = meta.primary_key
 	primary_key = get_primary_key(entry)
 
+	# validate the include parameter
+	include_is_valid(include, entry, factory)
+
 	if linkage:
 		# we only want resource linkage
-		return {
+		return ({
 			u"id": unicode(primary_key),
 			u"type": meta.name
-		}
+		}, [])
 
 	# prepare the attribute dict and a relationship container
 	attributes = {}
+	included = []
 	base_uri = request.urlparts.scheme + "://" + request.urlparts.netloc
 	relationships = JsonAPIRelationships(base_uri)
 
@@ -44,9 +71,19 @@ def entry_to_resource(entry, context, linkage = False):
 				relationships.add(
 					field.name, # name of the relation
 					context.get_endpoint(model), # the current endpoint to generate links
-					entry_to_resource(obj, context, linkage = True), # resource linkage
+					entry_to_resource(obj, context, linkage = True)[0], # resource linkage
 					primary_key # the current primary key
 				)
+
+				if include_matches(include, field.name):
+					incdata, incinc = entry_to_resource(
+						obj,
+						context,
+						include = include_matches(include, field.name)
+					)
+
+					included.append(incdata)
+					included += incinc
 
 			else:
 				# the reference is null
@@ -62,9 +99,9 @@ def entry_to_resource(entry, context, linkage = False):
 			# save the attribute
 			attributes[field.name] = attr
 
-	if context.get_factory(model).related:
+	if factory and factory.related:
 		# we have 1:n or n:m relations
-		for field, rel in context.get_factory(model).related.iteritems():
+		for field, rel in factory.related.iteritems():
 			via = None
 
 			if isinstance(rel, tuple):
@@ -84,8 +121,18 @@ def entry_to_resource(entry, context, linkage = False):
 			# retrieve the related resources
 			for child_row in query:
 				data.append(
-					dict(entry_to_resource(child_row, context, linkage = True))
+					dict(entry_to_resource(child_row, context, linkage = True)[0])
 				)
+
+				if include_matches(include, field):
+					incdata, incinc = entry_to_resource(
+						child_row,
+						context,
+						include = include_matches(include, field)
+					)
+
+					included.append(incdata)
+					included += incinc
 
 			relationships.add(
 				field,
@@ -98,31 +145,23 @@ def entry_to_resource(entry, context, linkage = False):
 	resource = JsonAPIResource(primary_key, meta.name, attributes = attributes)
 
 	# format self link
-	resource.links = {
-		"self": "{}://{}{}/{}".format(
-			request.urlparts.scheme,
-			request.urlparts.netloc,
-			context.get_endpoint(model),
-			primary_key
-		)
-	}
+	if context.get_endpoint(model):
+		resource.links = {
+			"self": "{}://{}{}/{}".format(
+				request.urlparts.scheme,
+				request.urlparts.netloc,
+				context.get_endpoint(model),
+				primary_key
+			)
+		}
 
 	if len(relationships):
 		resource.relationships = relationships
 
-	return resource
+	return (resource, included)
 
 
 def get_reverse_field(child, parent):
 	for field in child._meta.sorted_fields:
 		if isinstance(field, ForeignKeyField) and field.rel_model == parent:
 			return field
-
-
-## DECORATORS
-
-def ContentType(fn):
-	def outer(*args, **kwargs):
-		response.content_type = CONTENT_TYPE
-		return fn(*args, **kwargs)
-	return outer

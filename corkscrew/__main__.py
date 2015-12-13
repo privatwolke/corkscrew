@@ -13,7 +13,6 @@ if __name__ == "__main__":
 	insertFixtures()
 
 	app = CorkscrewApplication(PHF)
-	app.register(Tag,     endpoint = "/tags")
 	app.register(Comment, endpoint = "/comments")
 	app.register(Person,  endpoint = "/people")
 

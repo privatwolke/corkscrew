@@ -31,10 +31,10 @@ class PeeweeHandlerFactory(object):
 		self.context = None
 
 
-	def entry_to_resource(self, entry, linkage = False):
+	def entry_to_resource(self, entry, include = [], linkage = False):
 		"""Formats a peewee database row as a JsonAPIResource."""
 
-		return entry_to_resource(entry, self.context, linkage)
+		return entry_to_resource(entry, self.context, include, linkage)
 
 
 	def get_reverse_field(self, target):
@@ -71,7 +71,7 @@ class PeeweeHandlerFactory(object):
 				attributes["id"] = request_doc["data"]["id"]
 
 			created = self.model.create(**attributes)
-			response_doc.data = self.entry_to_resource(created)
+			response_doc.data = self.entry_to_resource(created)[0]
 
 			self.listener.after_create(response_doc)
 
@@ -80,7 +80,7 @@ class PeeweeHandlerFactory(object):
 				get_primary_key(created))
 			)
 
-			return json.dumps(dict(response_doc))
+			return json.dumps(dict(response_doc), sort_keys = True)
 
 		return fn_create
 
@@ -99,10 +99,16 @@ class PeeweeHandlerFactory(object):
 				self.model._meta.primary_key == _id
 			).get()
 
-			response_doc.data = self.entry_to_resource(entry)
+			data, included = self.entry_to_resource(
+				entry,
+				include = request.query.include.split(",")
+			)
+
+			response_doc.data = data
+			response_doc.included = included
 
 			self.listener.after_get(response_doc)
-			return json.dumps(dict(response_doc))
+			return json.dumps(dict(response_doc), sort_keys = True)
 
 		return fn_get
 
@@ -122,12 +128,16 @@ class PeeweeHandlerFactory(object):
 
 			relation = getattr(entry, relationship)
 			# non existant relationships must return successful with data: null
-			response_doc.data = self.entry_to_resource(
+			data, included = self.entry_to_resource(
 				relation,
+				include = request.query.include.split(","),
 				linkage = linkage
-			) if relation else None
+			) if relation else (None, [])
 
-			return json.dumps(dict(response_doc))
+			response_doc.data = data
+			response_doc.included = included
+
+			return json.dumps(dict(response_doc), sort_keys = True)
 
 		return fn_get_relationship
 
@@ -152,14 +162,16 @@ class PeeweeHandlerFactory(object):
 				query = target.select().where(reverse_field == _id)
 
 			for entry in query:
-				response_doc.data.append(
-					self.entry_to_resource(
-						entry,
-						linkage = linkage
-					)
+				data, included = self.entry_to_resource(
+					entry,
+					include = request.query.include.split(","),
+					linkage = linkage
 				)
 
-			return json.dumps(dict(response_doc))
+				response_doc.data.append(data)
+				response_doc.included += included
+
+			return json.dumps(dict(response_doc), sort_keys = True)
 
 		return fn_get_reverse_relationship
 
@@ -175,7 +187,13 @@ class PeeweeHandlerFactory(object):
 			response_doc = JsonAPIResponse()
 
 			for entry in self.model.select():
-				response_doc.data.append(self.entry_to_resource(entry))
+				data, included = self.entry_to_resource(
+					entry,
+					include = request.query.include.split(",")
+				)
+
+				response_doc.data.append(data)
+				response_doc.included += included
 
 			self.listener.after_list(response_doc)
 			return json.dumps(dict(response_doc), sort_keys = True)

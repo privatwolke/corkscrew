@@ -18,7 +18,6 @@ class TestCorkscrew(unittest.TestSuite):
 		insertFixtures()
 
 		app = CorkscrewApplication(PHF)
-		app.register(Tag,     endpoint = "/tags")
 		app.register(Comment, endpoint = "/comments")
 		app.register(Person,  endpoint = "/people")
 
@@ -38,10 +37,6 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def tearDown(self):
 		database.close()
-
-
-	def testListTags(self):
-		result = self.app.get("/tags")
 
 
 	def testList(self):
@@ -535,5 +530,41 @@ class TestCorkscrew(unittest.TestSuite):
 			for subentry in subresult.json["data"]:
 				assert {"id": subentry["id"], "type": subentry["type"]} in data
 
-				subsubresult = self.app.get(subentry["links"]["self"])
-				assert subentry == subsubresult.json["data"]
+				if "links" in subentry and "self" in subentry["links"]:
+					subsubresult = self.app.get(subentry["links"]["self"])
+					assert subentry == subsubresult.json["data"]
+
+
+	def testIncludeParameterForwardRelationship(self):
+		result = self.app.get("/articles/2?include=cover")
+		assert "included" in result.json
+
+		# the server must not return any other fields than requested
+		assert len(result.json["included"]) is 1
+
+		ref = result.json["data"]["relationships"]["cover"]["data"]
+		inc = result.json["included"][0]
+
+		assert inc["type"] == ref["type"]
+		assert inc["id"] == ref["id"]
+
+		# the self link must be valid and refer to the same object
+		subresult = self.app.get(inc["links"]["self"])
+		assert subresult.json["data"] == inc
+
+
+	def testIncludeParameterReverseRelationship(self):
+		result = self.app.get("/articles/1?include=comments")
+		assert "included" in result.json
+
+		# the server must not return any other fields than requested
+		assert len(result.json["included"]) is len(COMMENT_BODIES)
+
+		refs = result.json["data"]["relationships"]["comments"]["data"]
+
+		for inc in result.json["included"]:
+			assert {"id": inc["id"], "type": inc["type"]} in refs
+
+			# the self link must be valid and refer to the same object
+			subresult = self.app.get(inc["links"]["self"])
+			assert subresult.json["data"] == inc

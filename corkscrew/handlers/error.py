@@ -5,7 +5,7 @@ import json
 import logging, traceback
 from bottle import abort, response
 from peewee import IntegrityError
-from corkscrew.jsonapi import JsonAPIResponse, JsonAPIError, CONTENT_TYPE
+from corkscrew.jsonapi import JsonAPIResponse, JsonAPIError, JsonAPIException, CONTENT_TYPE
 
 def fn_error(error):
 	error.content_type = CONTENT_TYPE
@@ -23,7 +23,9 @@ def ErrorHandler(fn):
 			return fn(*args, **kwargs)
 
 		except ValueError:
+			logging.error("".join(traceback.format_exception(*sys.exc_info())))
 			abort(400, "Could not parse request document. Be sure to use valid JSON.")
+
 
 		except IntegrityError as e:
 			if str(e).startswith("NOT NULL constraint"):
@@ -38,8 +40,14 @@ def ErrorHandler(fn):
 
 			abort(400, e)
 
+
 		except AssertionError as e:
 			abort(400, e)
+
+
+		except JsonAPIException as e:
+			abort(e.status, e)
+
 
 		except Exception as e:
 			if e.__class__.__name__.endswith("DoesNotExist"):

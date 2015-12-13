@@ -15,7 +15,9 @@ class JsonAPIBase(object):
 
 
 class JsonAPIException(Exception):
-	pass
+	def __init__(self, message, status = 500):
+		self.status = status
+		super(JsonAPIException, self).__init__(message)
 
 
 class JsonAPIResponse(JsonAPIBase):
@@ -38,6 +40,15 @@ class JsonAPIResponse(JsonAPIBase):
 			yield ("data", None)
 		else:
 			yield ("data", dict(self.data))
+
+		if self.included:
+			included = []
+			for inc in self.included:
+				i = dict(inc)
+				if not i in included:
+					included.append(i)
+
+			yield ("included", included)
 
 		if not ((hasattr(self, "meta") and self.meta) or hasattr(self, "data") or self.errors):
 			raise JsonAPIException("A document MUST contain at least one of the following top-level members: data, errors, meta.")
