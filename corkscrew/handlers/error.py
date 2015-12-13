@@ -3,16 +3,19 @@
 import sys
 import json
 import logging, traceback
-from bottle import abort, response
+from bottle import abort, request, response
 from peewee import IntegrityError
 from corkscrew.jsonapi import JsonAPIResponse, JsonAPIError, JsonAPIException, CONTENT_TYPE
 
 def fn_error(error):
-	error.content_type = CONTENT_TYPE
-	doc = JsonAPIResponse()
-	err = JsonAPIError(code = error.status, title = error.body)
-	doc.errors.append(err)
-	return json.dumps(dict(doc))
+	try:
+		error.content_type = CONTENT_TYPE
+		doc = JsonAPIResponse(request.url)
+		err = JsonAPIError(code = error.status, title = error.body)
+		doc.errors.append(err)
+		return json.dumps(dict(doc), sort_keys = True)
+	except:
+		logging.error("".join(traceback.format_exception(*sys.exc_info())))
 
 
 def ErrorHandler(fn):

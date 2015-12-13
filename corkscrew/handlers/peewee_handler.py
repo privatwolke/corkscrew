@@ -31,18 +31,88 @@ class PeeweeHandlerFactory(object):
 		self.context = None
 
 
-	def entry_to_resource(self, entry, include = [], fields = {}, linkage = False):
+	def __entry_to_resource(self, entry, include = [], fields = {}, linkage = False):
 		"""Formats a peewee database row as a JsonAPIResource."""
 
 		return entry_to_resource(entry, self.context, include, fields, linkage)
 
 
-	def get_reverse_field(self, target):
+	def __get_reverse_field(self, target):
 		"""Returns the back reference field from a target model to self.model."""
 
 		for f in target._meta.sorted_fields:
 			if isinstance(f, ForeignKeyField) and f.rel_model == self.model:
 				return f
+
+
+	def __get(self, _id):
+		"""Retrieves a singlar resource by its ID."""
+
+		response_doc = JsonAPIResponse(request.url)
+
+		entry = self.model.select().where(
+			self.model._meta.primary_key == _id
+		).get()
+
+		data, included = self.__entry_to_resource(
+			entry,
+			include = request.query.include.split(","),
+			fields = parse_fields_parameter()
+		)
+
+		response_doc.data = data
+		response_doc.included = included
+
+		return json.dumps(dict(response_doc), sort_keys = True)
+
+
+	def __patch_relationships(self, _id, relationships):
+		"""Works through a data.relationships object and patches the given
+		relationships in the data store.
+		"""
+
+		entry = self.model.select().where(
+			self.model._meta.primary_key == _id
+		).get()
+
+		for key, relationship in relationships.iteritems():
+
+			if key in self.related:
+				# target model
+				target = self.related[key]
+
+				# this is a reverse relationship that will be updated
+				reverse_field = self.__get_reverse_field(target)
+
+				with target._meta.database.atomic() as txn:
+					# remove all existing links
+					for row in target.select().where(reverse_field == entry):
+						setattr(row, reverse_field.name, None)
+						row.save()
+
+					if isinstance(relationship["data"], list):
+						# add new links
+						for linkage in relationship["data"]:
+							row = target.select().where(
+								related[key]._meta.primary_key == int(linkage["id"])
+							).get()
+
+							setattr(row, reverse_field.name, entry)
+							row.save()
+
+			elif relationship["data"] is None:
+				# this is a direct relationship that will be set to null
+				setattr(entry, key, None)
+
+			elif hasattr(entry, key):
+				# this is a direct relationship with a new value
+				setattr(entry, key, relationship["data"]["id"])
+
+			else:
+				# we should not encounter a non existant field
+				raise JsonAPIException("Encountered unknown relationship field: '{}'.".format(key))
+
+		entry.save()
 
 
 	def create(self):
@@ -56,7 +126,6 @@ class PeeweeHandlerFactory(object):
 			JsonAPIValidator.validate_create(request_doc, self.model._meta.name)
 
 			self.listener.before_create(request)
-			response_doc = JsonAPIResponse()
 
 			attributes = {}
 
@@ -71,16 +140,15 @@ class PeeweeHandlerFactory(object):
 				attributes["id"] = request_doc["data"]["id"]
 
 			created = self.model.create(**attributes)
-			response_doc.data = self.entry_to_resource(created)[0]
 
-			self.listener.after_create(response_doc)
+			self.listener.after_create(created)
 
 			response.set_header("Location", "{}/{}".format(
 				request.url,
 				get_primary_key(created))
 			)
 
-			return json.dumps(dict(response_doc), sort_keys = True)
+			return self.__get(get_primary_key(created))
 
 		return fn_create
 
@@ -93,26 +161,10 @@ class PeeweeHandlerFactory(object):
 			"""Retrieves a singlar resource by its ID."""
 
 			self.listener.before_get(_id)
-			response_doc = JsonAPIResponse()
-
-			entry = self.model.select().where(
-				self.model._meta.primary_key == _id
-			).get()
-
-			data, included = self.entry_to_resource(
-				entry,
-				include = request.query.include.split(","),
-				fields = parse_fields_parameter()
-			)
-
-			response_doc.data = data
-			response_doc.included = included
-			response_doc.links = {
-				u"self": request.url
-			}
-
+			response_doc = self.__get(_id)
 			self.listener.after_get(response_doc)
-			return json.dumps(dict(response_doc), sort_keys = True)
+
+			return response_doc
 
 		return fn_get
 
@@ -124,7 +176,7 @@ class PeeweeHandlerFactory(object):
 		def fn_get_relationship(_id):
 			"""Returns either a listing of the relationship or the data itself."""
 
-			response_doc = JsonAPIResponse()
+			response_doc = JsonAPIResponse(request.url)
 
 			entry = self.model.select().where(
 				self.model._meta.primary_key == _id
@@ -132,7 +184,7 @@ class PeeweeHandlerFactory(object):
 
 			relation = getattr(entry, relationship)
 			# non existant relationships must return successful with data: null
-			data, included = self.entry_to_resource(
+			data, included = self.__entry_to_resource(
 				relation,
 				include = request.query.include.split(","),
 				fields = parse_fields_parameter(),
@@ -141,9 +193,6 @@ class PeeweeHandlerFactory(object):
 
 			response_doc.data = data
 			response_doc.included = included
-			response_doc.links = {
-				u"self": request.url
-			}
 
 			return json.dumps(dict(response_doc), sort_keys = True)
 
@@ -153,7 +202,7 @@ class PeeweeHandlerFactory(object):
 	def get_reverse_relationship(self, target, via, linkage = False):
 		"""Returns a function that retrieves or lists a reverse relationship."""
 
-		reverse_field = self.get_reverse_field(via or target)
+		reverse_field = self.__get_reverse_field(via or target)
 
 		if not reverse_field:
 			raise Exception("There is no reverse field for this relationship: " + str(self.model) + " -> " + str(target))
@@ -162,7 +211,7 @@ class PeeweeHandlerFactory(object):
 		def fn_get_reverse_relationship(_id):
 			"""Returns either listing of the reverse relationship or the data itself."""
 
-			response_doc = JsonAPIResponse()
+			response_doc = JsonAPIResponse(request.url)
 
 			if via:
 				query = target.select().join(via).where(reverse_field == _id)
@@ -170,7 +219,7 @@ class PeeweeHandlerFactory(object):
 				query = target.select().where(reverse_field == _id)
 
 			for entry in query:
-				data, included = self.entry_to_resource(
+				data, included = self.__entry_to_resource(
 					entry,
 					include = request.query.include.split(","),
 					fields = parse_fields_parameter(),
@@ -179,10 +228,6 @@ class PeeweeHandlerFactory(object):
 
 				response_doc.data.append(data)
 				response_doc.included += included
-
-			response_doc.links = {
-				u"self": request.url
-			}
 
 			return json.dumps(dict(response_doc), sort_keys = True)
 
@@ -197,10 +242,10 @@ class PeeweeHandlerFactory(object):
 			"""Returns a listing of resources."""
 
 			self.listener.before_list()
-			response_doc = JsonAPIResponse()
+			response_doc = JsonAPIResponse(request.url)
 
 			for entry in self.model.select():
-				data, included = self.entry_to_resource(
+				data, included = self.__entry_to_resource(
 					entry,
 					include = request.query.include.split(","),
 					fields = parse_fields_parameter()
@@ -208,10 +253,6 @@ class PeeweeHandlerFactory(object):
 
 				response_doc.data.append(data)
 				response_doc.included += included
-
-			response_doc.links = {
-				u"self": request.url
-			}
 
 			self.listener.after_list(response_doc)
 			return json.dumps(dict(response_doc), sort_keys = True)
@@ -252,55 +293,6 @@ class PeeweeHandlerFactory(object):
 		return fn_patch_relationship
 
 
-	def __patch_relationships(self, _id, relationships):
-		"""Works through a data.relationships object and patches the given
-		relationships in the data store.
-		"""
-
-		entry = self.model.select().where(
-			self.model._meta.primary_key == _id
-		).get()
-
-		for key, relationship in relationships.iteritems():
-
-			if key in self.related:
-				# target model
-				target = self.related[key]
-
-				# this is a reverse relationship that will be updated
-				reverse_field = self.get_reverse_field(target)
-
-				with target._meta.database.atomic() as txn:
-					# remove all existing links
-					for row in target.select().where(reverse_field == entry):
-						setattr(row, reverse_field.name, None)
-						row.save()
-
-					if isinstance(relationship["data"], list):
-						# add new links
-						for linkage in relationship["data"]:
-							row = target.select().where(
-								related[key]._meta.primary_key == int(linkage["id"])
-							).get()
-
-							setattr(row, reverse_field.name, entry)
-							row.save()
-
-			elif relationship["data"] is None:
-				# this is a direct relationship that will be set to null
-				setattr(entry, key, None)
-
-			elif hasattr(entry, key):
-				# this is a direct relationship with a new value
-				setattr(entry, key, relationship["data"]["id"])
-
-			else:
-				# we should not encounter a non existant field
-				raise JsonAPIException("Encountered unknown relationship field: '{}'.".format(key))
-
-		entry.save()
-
-
 	def patch(self):
 		"""Returns a function that handles a PATCH request to a resource."""
 
@@ -309,7 +301,11 @@ class PeeweeHandlerFactory(object):
 			"""Handles PATCH requests to the given resource."""
 
 			request_doc = request_doc or json.loads(request.body.getvalue())
-			JsonAPIValidator.validate_patch(request_doc, _id, self.model._meta.name)
+			JsonAPIValidator.validate_patch(
+				request_doc,
+				_id,
+				self.model._meta.name
+			)
 
 			self.listener.before_patch(request_doc)
 
@@ -326,11 +322,14 @@ class PeeweeHandlerFactory(object):
 
 			if "relationships" in request_doc["data"]:
 				# patch given relationships
-				self.__patch_relationships(_id, request_doc["data"]["relationships"])
+				self.__patch_relationships(
+					_id,
+					request_doc["data"]["relationships"]
+				)
 
 			if self.listener.after_patch(response):
 				# if the listener changed something else then return the object
-				return self.get()(_id)
+				return self.__get(_id)
 
 			else:
 				# nothing changed, we return a 204 No Content status

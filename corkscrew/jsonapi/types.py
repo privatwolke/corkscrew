@@ -21,11 +21,11 @@ class JsonAPIException(Exception):
 
 
 class JsonAPIResponse(JsonAPIBase):
-	def __init__(self, **kwargs):
+	def __init__(self, self_url, **kwargs):
 		if not hasattr(self, "data"):     self.data = []
 		if not hasattr(self, "errors"):   self.errors = []
 		if not hasattr(self, "included"): self.included = []
-		if not hasattr(self, "links"):    self.links = {}
+		if not hasattr(self, "links"):    self.links = { u"self": self_url }
 
 	def generator(self):
 		if hasattr(self, "meta") and self.meta:
