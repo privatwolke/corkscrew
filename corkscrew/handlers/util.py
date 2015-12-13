@@ -6,12 +6,18 @@ from urlparse import urljoin
 from peewee import ForeignKeyField, PrimaryKeyField
 from corkscrew.jsonapi import JsonAPIResource, JsonAPIRelationships, JsonAPIException
 
-def model_to_endpoint(model):
-	return model.__name__.lower()
-
 
 def get_primary_key(entry):
 	return getattr(entry, entry.__class__._meta.primary_key.name)
+
+
+def parse_fields_parameter():
+	fields = {}
+	for param in request.query:
+		if param.startswith("fields["):
+			fields[param[7:-1]] = getattr(request.query, param).split(",")
+
+	return fields
 
 
 def include_is_valid(include, entry, factory):
@@ -36,7 +42,7 @@ def include_matches(include, field):
 	return matches
 
 
-def entry_to_resource(entry, context, include = [], linkage = False):
+def entry_to_resource(entry, context, include = [], fields = {}, linkage = False):
 	factory = context.get_factory(entry.__class__)
 	model = entry.__class__
 	meta = model._meta
@@ -62,6 +68,10 @@ def entry_to_resource(entry, context, include = [], linkage = False):
 	for field in meta.sorted_fields:
 		# for each field
 
+		if meta.name in fields and not field.name in fields[meta.name]:
+			# the client has requested certain fields and this is not one of them
+			continue
+
 		if isinstance(field, ForeignKeyField):
 			# we have a reference to another model, retrieve it
 			obj = getattr(entry, field.name)
@@ -79,7 +89,8 @@ def entry_to_resource(entry, context, include = [], linkage = False):
 					incdata, incinc = entry_to_resource(
 						obj,
 						context,
-						include = include_matches(include, field.name)
+						include = include_matches(include, field.name),
+						fields = fields
 					)
 
 					included.append(incdata)
@@ -102,10 +113,15 @@ def entry_to_resource(entry, context, include = [], linkage = False):
 	if factory and factory.related:
 		# we have 1:n or n:m relations
 		for field, rel in factory.related.iteritems():
+
 			via = None
 
 			if isinstance(rel, tuple):
 				rel, via = rel
+
+			if meta.name in fields and not field in fields[meta.name]:
+				# the client has requested certain fields, but this is not one of them
+				continue
 
 			data = []
 
@@ -128,7 +144,8 @@ def entry_to_resource(entry, context, include = [], linkage = False):
 					incdata, incinc = entry_to_resource(
 						child_row,
 						context,
-						include = include_matches(include, field)
+						include = include_matches(include, field),
+						fields = fields
 					)
 
 					included.append(incdata)
@@ -143,8 +160,11 @@ def entry_to_resource(entry, context, include = [], linkage = False):
 
 	# construct a resource object
 	resource = JsonAPIResource(primary_key, meta.name, attributes = attributes)
+	print resource.attributes
 
-	# format self link
+	# add a self link to the resource if it has its own endpoint
+	# note that models that are not exposed directly through app.register do not
+	# have self links.
 	if context.get_endpoint(model):
 		resource.links = {
 			"self": "{}://{}{}/{}".format(

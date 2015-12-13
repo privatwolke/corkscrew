@@ -5,7 +5,7 @@ from peewee import ForeignKeyField
 from bottle import request, response
 
 from corkscrew.jsonapi import JsonAPIValidator, JsonAPIResponse
-from corkscrew.handlers.util import entry_to_resource, get_primary_key
+from corkscrew.handlers.util import entry_to_resource, get_primary_key, parse_fields_parameter
 from corkscrew.handlers import ErrorHandler, Listener
 
 
@@ -31,10 +31,10 @@ class PeeweeHandlerFactory(object):
 		self.context = None
 
 
-	def entry_to_resource(self, entry, include = [], linkage = False):
+	def entry_to_resource(self, entry, include = [], fields = {}, linkage = False):
 		"""Formats a peewee database row as a JsonAPIResource."""
 
-		return entry_to_resource(entry, self.context, include, linkage)
+		return entry_to_resource(entry, self.context, include, fields, linkage)
 
 
 	def get_reverse_field(self, target):
@@ -101,7 +101,8 @@ class PeeweeHandlerFactory(object):
 
 			data, included = self.entry_to_resource(
 				entry,
-				include = request.query.include.split(",")
+				include = request.query.include.split(","),
+				fields = parse_fields_parameter()
 			)
 
 			response_doc.data = data

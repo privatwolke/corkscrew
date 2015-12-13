@@ -109,7 +109,7 @@ class JsonAPIValidator(object):
 		assert not ("data" in doc and "errors" in doc), "The members data and errors MUST NOT coexist in the same document."
 
 		for key in doc.keys():
-			assert key in ["data", "errors", "meta"], "objects defined by this specification MUST NOT contain any additional members"
+			assert key in ["data", "errors", "meta", "links", "jsonapi", "included"], "objects defined by this specification MUST NOT contain any additional members"
 
 		if "data" in doc:
 			assert doc["data"] is None or isinstance(doc["data"], dict) or isinstance(doc["data"], list), "Primary data MUST be either: null, dict or list."

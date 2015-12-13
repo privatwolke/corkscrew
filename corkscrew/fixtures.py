@@ -1,6 +1,6 @@
 # coding: utf-8
 
-from peewee import Proxy, Model, PrimaryKeyField, CharField, ForeignKeyField
+from peewee import Proxy, Model, PrimaryKeyField, CharField, IntegerField, ForeignKeyField
 
 
 database = Proxy()
@@ -14,6 +14,7 @@ class BaseModel(Model):
 class Person(BaseModel):
 	id = PrimaryKeyField()
 	name = CharField()
+	age = IntegerField()
 
 
 class Photo(BaseModel):
@@ -58,6 +59,8 @@ PERSON_NAMES = [
 	"Jane Doe"
 ]
 
+PERSON_AGES = [18, 22]
+
 PHOTO_TITLE = "A New Beginning"
 PHOTO_SRC = "https://example.com/test.jpg"
 
@@ -75,8 +78,8 @@ TAG_NAMES = [
 def insertFixtures():
 	database.create_tables([Person, Photo, Tag, Comment, Article, PhotoTag])
 
-	person1 = Person.create(name = PERSON_NAMES[0])
-	person2 = Person.create(name = PERSON_NAMES[1])
+	person1 = Person.create(name = PERSON_NAMES[0], age = PERSON_AGES[0])
+	person2 = Person.create(name = PERSON_NAMES[1], age = PERSON_AGES[1])
 
 	photo = Photo.create(
 		title        = PHOTO_TITLE,

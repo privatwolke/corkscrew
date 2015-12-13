@@ -301,13 +301,32 @@ class TestCorkscrew(unittest.TestSuite):
 			JsonAPIValidator.validate_jsonapi(res.json)
 
 
+	def testCreatingResourceWithMissingRequiredAttributeShouldFail(self):
+		request = {
+			u"data": {
+				u"type": u"person",
+				u"attributes": {
+					u"name": u"Eve Bobbington"
+					# attribute 'age' is missing
+				}
+			}
+		}
+
+		JsonAPIValidator.validate_jsonapi(request, True)
+
+		result = self.app.post_json("/people", params = request, status = 400)
+		JsonAPIValidator.validate_content_type(result.content_type)
+		JsonAPIValidator.validate_jsonapi(result.json)
+
+
 	def testCreateResourceWithAlreadyExistingId(self):
 		request = {
 			u"data": {
 				u"type": u"person",
 				u"id": u"1",
 				u"attributes": {
-					u"name": "Jimmy Cricket"
+					u"name": "Jimmy Cricket",
+					u"age": 12
 				}
 			}
 		}
@@ -537,6 +556,7 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def testIncludeParameterForwardRelationship(self):
 		result = self.app.get("/articles/2?include=cover")
+		JsonAPIValidator.validate(result.json)
 		assert "included" in result.json
 
 		# the server must not return any other fields than requested
@@ -555,6 +575,7 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def testIncludeParameterReverseRelationship(self):
 		result = self.app.get("/articles/1?include=comments")
+		JsonAPIValidator.validate(result.json)
 		assert "included" in result.json
 
 		# the server must not return any other fields than requested
@@ -568,3 +589,41 @@ class TestCorkscrew(unittest.TestSuite):
 			# the self link must be valid and refer to the same object
 			subresult = self.app.get(inc["links"]["self"])
 			assert subresult.json["data"] == inc
+
+
+	def testIncludeParameterWithInvalidFields(self):
+		self.app.get("/articles/1?include=invalid-field", status = 400)
+		self.app.get("/articles/1?include=author,invalid-field", status = 400)
+
+
+	def testIncludeParameterWithCircularRelationships(self):
+		self.app.get("/articles/1?include=comments.articles", status = 400)
+		self.app.get("/articles/1?include=comments.articles.comments", status = 400)
+
+
+	def testSparseFieldsets(self):
+		result = self.app.get("/people/1?fields[person]=age")
+		JsonAPIValidator.validate(result.json)
+
+		assert not "name" in result.json["data"]["attributes"]
+		assert "age" in result.json["data"]["attributes"]
+
+
+	def testSparseFieldsetsWithIncludedObjects(self):
+		result = self.app.get("/articles/1?include=comments&fields[comment]=")
+		JsonAPIValidator.validate(result.json)
+
+		for inc in result.json["included"]:
+			assert not "attributes" in inc
+
+		result = self.app.get("/comments/1?include=article.author&fields[person]=age")
+		JsonAPIValidator.validate(result.json)
+
+		is_included = False
+		for inc in result.json["included"]:
+			if inc["type"] == "person":
+				is_included = True
+				assert "age" in inc["attributes"]
+				assert not "name" in inc["attributes"]
+
+		assert is_included
