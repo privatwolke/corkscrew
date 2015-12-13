@@ -160,7 +160,6 @@ def entry_to_resource(entry, context, include = [], fields = {}, linkage = False
 
 	# construct a resource object
 	resource = JsonAPIResource(primary_key, meta.name, attributes = attributes)
-	print resource.attributes
 
 	# add a self link to the resource if it has its own endpoint
 	# note that models that are not exposed directly through app.register do not

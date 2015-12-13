@@ -25,6 +25,7 @@ class JsonAPIResponse(JsonAPIBase):
 		if not hasattr(self, "data"):     self.data = []
 		if not hasattr(self, "errors"):   self.errors = []
 		if not hasattr(self, "included"): self.included = []
+		if not hasattr(self, "links"):    self.links = {}
 
 	def generator(self):
 		if hasattr(self, "meta") and self.meta:
@@ -52,6 +53,9 @@ class JsonAPIResponse(JsonAPIBase):
 
 		if not ((hasattr(self, "meta") and self.meta) or hasattr(self, "data") or self.errors):
 			raise JsonAPIException("A document MUST contain at least one of the following top-level members: data, errors, meta.")
+
+		if hasattr(self, "links") and self.links:
+			yield ("links", dict(self.links))
 
 
 

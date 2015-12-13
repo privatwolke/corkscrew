@@ -107,6 +107,9 @@ class PeeweeHandlerFactory(object):
 
 			response_doc.data = data
 			response_doc.included = included
+			response_doc.links = {
+				u"self": request.url
+			}
 
 			self.listener.after_get(response_doc)
 			return json.dumps(dict(response_doc), sort_keys = True)
@@ -132,11 +135,15 @@ class PeeweeHandlerFactory(object):
 			data, included = self.entry_to_resource(
 				relation,
 				include = request.query.include.split(","),
+				fields = parse_fields_parameter(),
 				linkage = linkage
 			) if relation else (None, [])
 
 			response_doc.data = data
 			response_doc.included = included
+			response_doc.links = {
+				u"self": request.url
+			}
 
 			return json.dumps(dict(response_doc), sort_keys = True)
 
@@ -166,11 +173,16 @@ class PeeweeHandlerFactory(object):
 				data, included = self.entry_to_resource(
 					entry,
 					include = request.query.include.split(","),
+					fields = parse_fields_parameter(),
 					linkage = linkage
 				)
 
 				response_doc.data.append(data)
 				response_doc.included += included
+
+			response_doc.links = {
+				u"self": request.url
+			}
 
 			return json.dumps(dict(response_doc), sort_keys = True)
 
@@ -190,11 +202,16 @@ class PeeweeHandlerFactory(object):
 			for entry in self.model.select():
 				data, included = self.entry_to_resource(
 					entry,
-					include = request.query.include.split(",")
+					include = request.query.include.split(","),
+					fields = parse_fields_parameter()
 				)
 
 				response_doc.data.append(data)
 				response_doc.included += included
+
+			response_doc.links = {
+				u"self": request.url
+			}
 
 			self.listener.after_list(response_doc)
 			return json.dumps(dict(response_doc), sort_keys = True)

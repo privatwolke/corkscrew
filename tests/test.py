@@ -524,7 +524,7 @@ class TestCorkscrew(unittest.TestSuite):
 
 			# retrieve the related object's self link and ensure that it is the same object
 			subsubresult = self.app.get(subresult.json["data"]["links"]["self"])
-			assert subresult.json == subsubresult.json
+			assert subresult.json["data"] == subsubresult.json["data"]
 
 
 	def testValidateReverseRelationships(self):
@@ -589,6 +589,7 @@ class TestCorkscrew(unittest.TestSuite):
 			# the self link must be valid and refer to the same object
 			subresult = self.app.get(inc["links"]["self"])
 			assert subresult.json["data"] == inc
+			assert subresult.json["links"]["self"] == inc["links"]["self"]
 
 
 	def testIncludeParameterWithInvalidFields(self):
