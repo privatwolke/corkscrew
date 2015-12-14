@@ -19,7 +19,11 @@ class TestCorkscrew(unittest.TestSuite):
 
 		app = CorkscrewApplication(PHF)
 		app.register(Comment, endpoint = "/comments")
-		app.register(Person,  endpoint = "/people")
+
+		app.register(Person,
+			related = {"articles": Article },
+			endpoint = "/people"
+		)
 
 		app.register(
 			Photo,
@@ -430,22 +434,20 @@ class TestCorkscrew(unittest.TestSuite):
 
 
 	def testPatchingRelatedOneToNResourceShouldFail(self):
-		result = self.app.get("/articles/1/comments")
+		result = self.app.get("/people/1/articles")
 
 		assert len(result.json["data"]) is 2
 		for entry in result.json["data"]:
-			assert entry["attributes"]["body"] in COMMENT_BODIES
+			assert entry["attributes"]["title"] in ARTICLE_TITLES
 
-		# it is not allowed to orphan a comment
+		# it is not allowed to orphan an article
 		request = {
 			u"data": {
 				u"id": u"1",
-				u"type": u"article",
+				u"type": u"person",
 				u"relationships": {
-					u"comments": {
-						u"data": [
-							{u"id": u"1", u"type": "comment"}
-						]
+					u"articles": {
+						u"data": []
 					}
 				}
 			}
@@ -453,7 +455,7 @@ class TestCorkscrew(unittest.TestSuite):
 
 		JsonAPIValidator.validate_jsonapi(request)
 
-		result = self.app.patch_json("/articles/1", params = request, status = 400)
+		result = self.app.patch_json("/people/1", params = request, status = 400)
 		JsonAPIValidator.validate_jsonapi(result.json)
 		assert "cannot be null" in result.json["errors"][0]["title"]
 
@@ -482,6 +484,39 @@ class TestCorkscrew(unittest.TestSuite):
 		assert result.json["data"] is None
 
 
+	def testPatchingRelatedOneToMResource(self):
+		result = self.app.get("/articles/1/relationships/comments")
+		assert isinstance(result.json["data"], list)
+
+		del result.json["data"][0]
+
+		request = {
+			u"data": result.json["data"]
+		}
+
+		JsonAPIValidator.validate(request)
+		result = self.app.patch_json("/articles/1/relationships/comments", params = request)
+
+
+	def testPatchingRelatedNToMResource(self):
+		result = self.app.get("/photos/1/relationships/tags")
+		assert isinstance(result.json["data"], list)
+		assert len(result.json["data"]) is 2
+
+		request = {
+			u"data": result.json["data"]
+		}
+
+		# remove one tag
+		request["data"].pop()
+
+		self.app.patch_json("/photos/1/relationships/tags", params = request)
+
+		result = self.app.get("/photos/1/relationships/tags")
+		assert isinstance(result.json["data"], list)
+		assert len(result.json["data"]) is 1
+
+
 	def testGetNToMRelationship(self):
 		result = self.app.get("/photos/1/tags")
 		JsonAPIValidator.validate(result.json)
@@ -490,14 +525,6 @@ class TestCorkscrew(unittest.TestSuite):
 
 		for tag in result.json["data"]:
 			assert tag["attributes"]["name"] in TAG_NAMES
-
-
-	def testValidateNoRelationships(self):
-		result = self.app.get("/people")
-
-		# Person has no relationships
-		for entry in result.json["data"]:
-			assert not "relationships" in entry
 
 
 	def testValidateForwardRelationship(self):

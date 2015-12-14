@@ -14,7 +14,11 @@ if __name__ == "__main__":
 
 	app = CorkscrewApplication(PHF)
 	app.register(Comment, endpoint = "/comments")
-	app.register(Person,  endpoint = "/people")
+
+	app.register(Person,
+		related = {"articles": Article },
+		endpoint = "/people"
+	)
 
 	app.register(
 		Photo,

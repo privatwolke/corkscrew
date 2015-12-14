@@ -39,7 +39,7 @@ class Article(BaseModel):
 class Comment(BaseModel):
 	id = PrimaryKeyField()
 	body = CharField()
-	article = ForeignKeyField(Article)
+	article = ForeignKeyField(Article, null = True)
 	author = ForeignKeyField(Person)
 
 

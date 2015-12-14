@@ -37,11 +37,15 @@ class PeeweeHandlerFactory(object):
 		return entry_to_resource(entry, self.context, include, fields, linkage)
 
 
-	def __get_reverse_field(self, target):
+	def __get_reverse_field(self, target, field):
 		"""Returns the back reference field from a target model to self.model."""
 
 		for f in target._meta.sorted_fields:
-			if isinstance(f, ForeignKeyField) and f.rel_model == self.model:
+			if field:
+				if f.rel_model == self.model and field == f.name:
+					return f
+
+			elif isinstance(f, ForeignKeyField) and f.rel_model == self.model:
 				return f
 
 
@@ -78,27 +82,45 @@ class PeeweeHandlerFactory(object):
 		for key, relationship in relationships.iteritems():
 
 			if key in self.related:
+				via = None
+
 				# target model
 				target = self.related[key]
 
-				# this is a reverse relationship that will be updated
-				reverse_field = self.__get_reverse_field(target)
+				if isinstance(target, tuple):
+					target, via = target
 
-				with target._meta.database.atomic() as txn:
-					# remove all existing links
-					for row in target.select().where(reverse_field == entry):
-						setattr(row, reverse_field.name, None)
-						row.save()
+				if via:
+					reverse_field = self.__get_reverse_field(via, None)
+					via.delete().where(reverse_field == entry).execute()
 
 					if isinstance(relationship["data"], list):
-						# add new links
 						for linkage in relationship["data"]:
-							row = target.select().where(
-								related[key]._meta.primary_key == int(linkage["id"])
-							).get()
+							rel = via()
+							setattr(rel, reverse_field.name, entry)
+							setattr(rel, target._meta.name, int(linkage["id"]))
+							rel.save()
 
-							setattr(row, reverse_field.name, entry)
+				else:
+
+					# this is a reverse relationship that will be updated
+					reverse_field = self.__get_reverse_field(target, None)
+
+					with target._meta.database.atomic() as txn:
+						# remove all existing links
+						for row in target.select().where(reverse_field == entry):
+							setattr(row, reverse_field.name, None)
 							row.save()
+
+						if isinstance(relationship["data"], list):
+							# add new links
+							for linkage in relationship["data"]:
+								row = target.select().where(
+									target._meta.primary_key == int(linkage["id"])
+								).get()
+
+								setattr(row, reverse_field.name, entry)
+								row.save()
 
 			elif relationship["data"] is None:
 				# this is a direct relationship that will be set to null
@@ -199,10 +221,10 @@ class PeeweeHandlerFactory(object):
 		return fn_get_relationship
 
 
-	def get_reverse_relationship(self, target, via, linkage = False):
+	def get_reverse_relationship(self, target, via, field = None, linkage = False):
 		"""Returns a function that retrieves or lists a reverse relationship."""
 
-		reverse_field = self.__get_reverse_field(via or target)
+		reverse_field = self.__get_reverse_field(via or target, field)
 
 		if not reverse_field:
 			raise Exception("There is no reverse field for this relationship: " + str(self.model) + " -> " + str(target))
@@ -268,7 +290,7 @@ class PeeweeHandlerFactory(object):
 			"""Patches a relationship with the given ID and returns."""
 
 			request_doc = json.loads(request.body.getvalue())
-			JsonAPIValidator.validate_patch(request_doc, _id, None)
+			#JsonAPIValidator.validate_patch(request_doc, _id, None)
 
 			# PATCH /res/<_id>/relationships/other_res is equal to patching the
 			# main resource which is what we are doing now

@@ -33,7 +33,7 @@ class CorkscrewApplication(Bottle):
 
 	def __init__(self, handler_factory):
 		super(CorkscrewApplication, self).__init__()
-		
+
 		self.handler_factory = handler_factory
 		self.context = CorkscrewApplicationContext(self)
 
@@ -87,3 +87,4 @@ class CorkscrewApplication(Bottle):
 
 		ep = "{}/<_id>/relationships/{}".format(endpoint, name)
 		self.get(ep)(factory.get_reverse_relationship(target, via, linkage = True))
+		self.route(ep, "PATCH")(factory.patch_relationship(name))
