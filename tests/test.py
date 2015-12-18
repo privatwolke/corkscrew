@@ -11,7 +11,7 @@ from corkscrew.fixtures import *
 from corkscrew.jsonapi import JsonAPIValidator
 
 
-class TestCorkscrew(unittest.TestSuite):
+class TestCorkscrew(unittest.TestCase):
 
 	def setUp(self):
 		database.initialize(SqliteDatabase(":memory:"))
@@ -45,56 +45,56 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def testList(self):
 		result = self.app.get("/articles")
-		assert result.status == "200 OK"
+		self.assertEqual(result.status, "200 OK")
 
 		JsonAPIValidator.validate_content_type(result.content_type)
-		assert result.json
+		self.assertIsNotNone(result.json)
 
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert "data" in result.json
-		assert len(result.json["data"]) is len(ARTICLE_TITLES)
+		self.assertIn("data", result.json)
+		self.assertIs(len(result.json["data"]), len(ARTICLE_TITLES))
 		for row in result.json["data"]:
-			assert row["type"] == "article"
-			assert "attributes" in row
-			assert len(row["attributes"]) is 1
-			assert "title" in row["attributes"]
-			assert not "author" in row["attributes"]
-			assert row["attributes"]["title"] in ARTICLE_TITLES
-			assert "relationships" in row
+			self.assertEqual(row["type"], "article")
+			self.assertIn("attributes", row)
+			self.assertIs(len(row["attributes"]), 1)
+			self.assertIn("title", row["attributes"])
+			self.assertNotIn("author", row["attributes"])
+			self.assertIn(row["attributes"]["title"], ARTICLE_TITLES)
+			self.assertIn("relationships", row)
 
 			for key, relationship in row["relationships"].iteritems():
-				assert key in ["comments", "cover", "author"]
-				assert "links" in relationship
-				assert "related" in relationship["links"]
-				assert "self" in relationship["links"]
+				self.assertIn(key, ["comments", "cover", "author"])
+				self.assertIn("links", relationship)
+				self.assertIn("related", relationship["links"])
+				self.assertIn("self", relationship["links"])
 
 
 	def testGet(self):
 		result = self.app.get("/articles/1")
-		assert result.status == "200 OK"
-		assert result.json
+		self.assertEqual(result.status, "200 OK")
+		self.assertIsNotNone(result.json)
 
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert "data" in result.json
+		self.assertIn("data", result.json)
 
 		# we want a single result
-		assert type(result.json["data"]) == type({})
-		assert "attributes" in result.json["data"]
+		self.assertEqual(type(result.json["data"]), type({}))
+		self.assertIn("attributes", result.json["data"])
 
 		attributes = result.json["data"]["attributes"]
-		assert attributes["title"] == ARTICLE_TITLES[0]
+		self.assertEqual(attributes["title"], ARTICLE_TITLES[0])
 
-		assert "relationships" in result.json["data"]
+		self.assertIn("relationships", result.json["data"])
 
 		for key, relationship in result.json["data"]["relationships"].iteritems():
-			assert key in ["comments", "cover", "author"]
-			assert "links" in relationship
-			assert "related" in relationship["links"]
-			assert "self" in relationship["links"]
+			self.assertIn(key, ["comments", "cover", "author"])
+			self.assertIn("links", relationship)
+			self.assertIn("related", relationship["links"])
+			self.assertIn("self", relationship["links"])
 
-		assert isinstance(result.json["data"]["relationships"]["comments"]["data"], list)
+		self.assertIsInstance(result.json["data"]["relationships"]["comments"]["data"], list)
 
 
 	def testPost(self):
@@ -115,19 +115,19 @@ class TestCorkscrew(unittest.TestSuite):
 		JsonAPIValidator.validate_jsonapi(request, True)
 
 		result = self.app.post_json("/articles", params = request)
-		assert result.status == "200 OK"
+		self.assertEqual(result.status, "200 OK")
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.json
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert "relationships" in result.json["data"]
+		self.assertIn("relationships", result.json["data"])
 
 		for key, relationship in result.json["data"]["relationships"].iteritems():
-			assert key in ["comments", "cover", "author"]
-			assert "links" in relationship
-			assert "related" in relationship["links"]
-			assert "self" in relationship["links"]
+			self.assertIn(key, ["comments", "cover", "author"])
+			self.assertIn("links", relationship)
+			self.assertIn("related", relationship["links"])
+			self.assertIn("self", relationship["links"])
 
 
 	def testPatch(self):
@@ -144,7 +144,7 @@ class TestCorkscrew(unittest.TestSuite):
 		JsonAPIValidator.validate_jsonapi(request)
 
 		result = self.app.patch_json("/articles/1", params = request)
-		assert result.status == "202 Accepted" or result.status == "200 OK" or result.status == "204 No Content"
+		self.assertIn(result.status, ["202 Accepted", "200 OK", "204 No Content"])
 
 		if result.status == "204 No Content":
 			# nothing more to test
@@ -152,65 +152,65 @@ class TestCorkscrew(unittest.TestSuite):
 
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.json
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert result.json["data"]["attributes"]["title"] == "Changed First Entry"
+		self.assertIsNotNone(result.json)["data"]["attributes"]["title"] == "Changed First Entry"
 
 
 	def testDelete(self):
 		result = self.app.delete("/articles/1")
-		assert result.status in ["202 Accepted", "204 No Content", "200 OK"]
+		self.assertIn(result.status, ["202 Accepted", "204 No Content", "200 OK"])
 
 
 	def testGetRelated(self):
 		result = self.app.get("/articles/1")
-		assert result.status == "200 OK"
+		self.assertEqual(result.status, "200 OK")
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.json
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
 		result = self.app.get(result.json["data"]["relationships"]["author"]["links"]["related"])
-		assert result.status == "200 OK"
+		self.assertEqual(result.status, "200 OK")
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.json
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert "data" in result.json
-		assert type(result.json["data"]) == type({})
-		assert result.json["data"]["type"] == "person"
-		assert result.json["data"]["id"] == "1"
+		self.assertIn("data", result.json)
+		self.assertEqual(type(result.json["data"]), type({}))
+		self.assertEqual(result.json["data"]["type"], "person")
+		self.assertEqual(result.json["data"]["id"], "1")
 
 
 	def testGetRelationship(self):
 		result = self.app.get("/articles/1")
-		assert result.status == "200 OK"
+		self.assertEqual(result.status, "200 OK")
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.json
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
 		result = self.app.get(result.json["data"]["relationships"]["author"]["links"]["self"])
-		assert result.status == "200 OK"
+		self.assertEqual(result.status, "200 OK")
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.json
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert "data" in result.json
-		assert isinstance(result.json["data"], dict)
-		assert result.json["data"]["type"] == "person"
-		assert result.json["data"]["id"] == "1"
+		self.assertIn("data", result.json)
+		self.assertIsInstance(result.json["data"], dict)
+		self.assertEqual(result.json["data"]["type"], "person")
+		self.assertEqual(result.json["data"]["id"], "1")
 
 
 	def testPatchRelationship(self):
 		result = self.app.get("/articles/1")
-		assert result.status == "200 OK"
+		self.assertEqual(result.status, "200 OK")
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.json
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
 		relation = result.json["data"]["relationships"]["author"]["links"]["self"]
@@ -222,11 +222,11 @@ class TestCorkscrew(unittest.TestSuite):
 		JsonAPIValidator.validate_jsonapi(request)
 
 		result = self.app.patch_json(relation, params = request)
-		assert result.status in ["200 OK", "202 Accepted", "204 No Content"]
+		self.assertIn(result.status, ["200 OK", "202 Accepted", "204 No Content"])
 		if result.status == "204 No Content":
-			assert len(result.body) is 0
+			self.assertIs(len(result.body), 0)
 		elif result.status == "200 OK":
-			assert result.json
+			self.assertIsNotNone(result.json)
 			validate_jsonapi(result.json)
 
 
@@ -234,24 +234,24 @@ class TestCorkscrew(unittest.TestSuite):
 		result = self.app.get("/articles")
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.status == "200 OK"
+		self.assertEqual(result.status, "200 OK")
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert len(result.json["data"]) is 2
+		self.assertIs(len(result.json["data"]), 2)
 		for entry in result.json["data"]:
-			assert entry["type"] == "article"
-			assert isinstance(entry["id"], unicode)
-			assert entry["attributes"]["title"] in ARTICLE_TITLES
+			self.assertEqual(entry["type"], "article")
+			self.assertIsInstance(entry["id"], unicode)
+			self.assertIn(entry["attributes"]["title"], ARTICLE_TITLES)
 
 		Article.delete().where(True).execute()
 		result = self.app.get("/articles")
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.status == "200 OK"
-		assert result.json
+		self.assertEqual(result.status, "200 OK")
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert len(result.json["data"]) is 0
+		self.assertIs(len(result.json["data"]), 0)
 
 
 	def testFetchingNullRelationship(self):
@@ -261,16 +261,16 @@ class TestCorkscrew(unittest.TestSuite):
 		result = self.app.get(rel)
 		JsonAPIValidator.validate_content_type(result.content_type)
 
-		assert result.status == "200 OK"
-		assert result.json
+		self.assertEqual(result.status, "200 OK")
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
-		assert result.json["data"] is None
+		self.assertIsNone(result.json["data"])
 
 
 	def testFetchingMissingSingleResource(self):
 		result = self.app.get("/article/1337", status = 404)
-		assert result.json
+		self.assertIsNotNone(result.json)
 		JsonAPIValidator.validate_jsonapi(result.json)
 
 
@@ -301,7 +301,7 @@ class TestCorkscrew(unittest.TestSuite):
 
 		else:
 			res = self.app.get(result.location)
-			assert res.json
+			self.assertIsNotNone(res.json)
 			JsonAPIValidator.validate_jsonapi(res.json)
 
 
@@ -365,7 +365,7 @@ class TestCorkscrew(unittest.TestSuite):
 			JsonAPIValidator.validate_content_type(res.content_type)
 
 		res = self.app.get("/articles/1")
-		assert res.json["data"]["attributes"]["title"] == UPDATE_TITLE
+		self.assertEqual(res.json["data"]["attributes"]["title"], UPDATE_TITLE)
 
 
 	def testUpdatingResourceRelationships(self):
@@ -373,7 +373,7 @@ class TestCorkscrew(unittest.TestSuite):
 		request = result.json
 
 		# Person(1) is the current author
-		assert result.json["data"]["relationships"]["author"]["data"]["id"] == "1"
+		self.assertEqual(result.json["data"]["relationships"]["author"]["data"]["id"], "1")
 
 		# do not update attributes, server must leave missing attributes unchanged
 		del request["data"]["attributes"]
@@ -394,9 +394,9 @@ class TestCorkscrew(unittest.TestSuite):
 		result = self.app.patch_json("/articles/1", params = request)
 		result = self.app.get("/articles/1")
 
-		assert result.json["data"]["relationships"]["author"]["data"]["id"] != "1"
-		assert result.json["data"]["relationships"]["author"]["data"]["id"] == "2"
-		assert result.json["data"]["attributes"]["title"] == ARTICLE_TITLES[0]
+		self.assertNotEqual(result.json["data"]["relationships"]["author"]["data"]["id"], "1")
+		self.assertEqual(result.json["data"]["relationships"]["author"]["data"]["id"], "2")
+		self.assertEqual(result.json["data"]["attributes"]["title"], ARTICLE_TITLES[0])
 
 
 	def testDeletingIndividualResource(self):
@@ -420,9 +420,9 @@ class TestCorkscrew(unittest.TestSuite):
 		JsonAPIValidator.validate_jsonapi(result.json)
 
 		for entry in result.json["data"]:
-			assert entry["attributes"]["body"] in COMMENT_BODIES
-			assert entry["relationships"]["author"]["data"]["id"] == "2"
-			assert entry["relationships"]["article"]["data"]["id"] == "1"
+			self.assertIn(entry["attributes"]["body"], COMMENT_BODIES)
+			self.assertEqual(entry["relationships"]["author"]["data"]["id"], "2")
+			self.assertEqual(entry["relationships"]["article"]["data"]["id"], "1")
 
 
 	def testListingRelatedOneToNResource(self):
@@ -436,9 +436,9 @@ class TestCorkscrew(unittest.TestSuite):
 	def testPatchingRelatedOneToNResourceShouldFail(self):
 		result = self.app.get("/people/1/articles")
 
-		assert len(result.json["data"]) is 2
+		self.assertIs(len(result.json["data"]), 2)
 		for entry in result.json["data"]:
-			assert entry["attributes"]["title"] in ARTICLE_TITLES
+			self.assertIn(entry["attributes"]["title"], ARTICLE_TITLES)
 
 		# it is not allowed to orphan an article
 		request = {
@@ -457,12 +457,12 @@ class TestCorkscrew(unittest.TestSuite):
 
 		result = self.app.patch_json("/people/1", params = request, status = 400)
 		JsonAPIValidator.validate_jsonapi(result.json)
-		assert "cannot be null" in result.json["errors"][0]["title"]
+		self.assertIn("cannot be null", result.json["errors"][0]["title"])
 
 
 	def testPatchingRelatedOneToNResourceShouldSucceed(self):
 		result = self.app.get("/articles/2/cover")
-		assert isinstance(result.json["data"], dict)
+		self.assertIsInstance(result.json["data"], dict)
 
 		request = {
 			u"data": {
@@ -481,12 +481,12 @@ class TestCorkscrew(unittest.TestSuite):
 		result = self.app.patch_json("/articles/2", params = request)
 
 		result = self.app.get("/articles/2/cover")
-		assert result.json["data"] is None
+		self.assertIsNone(result.json["data"])
 
 
 	def testPatchingRelatedOneToMResource(self):
 		result = self.app.get("/articles/1/relationships/comments")
-		assert isinstance(result.json["data"], list)
+		self.assertIsInstance(result.json["data"], list)
 
 		del result.json["data"][0]
 
@@ -500,8 +500,8 @@ class TestCorkscrew(unittest.TestSuite):
 
 	def testPatchingRelatedNToMResource(self):
 		result = self.app.get("/photos/1/relationships/tags")
-		assert isinstance(result.json["data"], list)
-		assert len(result.json["data"]) is 2
+		self.assertIsInstance(result.json["data"], list)
+		self.assertIs(len(result.json["data"]), 2)
 
 		request = {
 			u"data": result.json["data"]
@@ -513,110 +513,110 @@ class TestCorkscrew(unittest.TestSuite):
 		self.app.patch_json("/photos/1/relationships/tags", params = request)
 
 		result = self.app.get("/photos/1/relationships/tags")
-		assert isinstance(result.json["data"], list)
-		assert len(result.json["data"]) is 1
+		self.assertIsInstance(result.json["data"], list)
+		self.assertIs(len(result.json["data"]), 1)
 
 
 	def testGetNToMRelationship(self):
 		result = self.app.get("/photos/1/tags")
 		JsonAPIValidator.validate(result.json)
 
-		assert len(result.json["data"]) is 2
+		self.assertIs(len(result.json["data"]), 2)
 
 		for tag in result.json["data"]:
-			assert tag["attributes"]["name"] in TAG_NAMES
+			self.assertIn(tag["attributes"]["name"], TAG_NAMES)
 
 
 	def testValidateForwardRelationship(self):
 		result = self.app.get("/photos")
 		# Photo has a forward relationship to Person (photographer)
 		for entry in result.json["data"]:
-			assert "relationships" in entry
+			self.assertIn("relationships", entry)
 			for name, relationship in entry["relationships"].iteritems():
-				assert name in ["photographer", "tags"]
+				self.assertIn(name, ["photographer", "tags"])
 
 			relationship = entry["relationships"]["photographer"]
 			data = relationship["data"]
 
 			# retrieve the /relationships link
 			subresult = self.app.get(relationship["links"]["self"])
-			assert subresult.json["data"] == data
+			self.assertEqual(subresult.json["data"], data)
 
 			# retrieve the related object
 			subresult = self.app.get(relationship["links"]["related"])
 
 			# type and id must match
-			assert subresult.json["data"]["id"] == data["id"]
-			assert subresult.json["data"]["type"] == data["type"]
+			self.assertEqual(subresult.json["data"]["id"], data["id"])
+			self.assertEqual(subresult.json["data"]["type"], data["type"])
 
 			# retrieve the related object's self link and ensure that it is the same object
 			subsubresult = self.app.get(subresult.json["data"]["links"]["self"])
-			assert subresult.json["data"] == subsubresult.json["data"]
+			self.assertEqual(subresult.json["data"], subsubresult.json["data"])
 
 
 	def testValidateReverseRelationships(self):
 		result = self.app.get("/photos")
 		# Photo has a reverse relationship to Tag (tags, via PhotoTag)
 		for entry in result.json["data"]:
-			assert "relationships" in entry
+			self.assertIn("relationships", entry)
 			for name, relationship in entry["relationships"].iteritems():
-				assert name in ["photographer", "tags"]
+				self.assertIn(name, ["photographer", "tags"])
 
 			relationship = entry["relationships"]["tags"]
 			data = relationship["data"]
 
 			# retrieve the /relationships link
 			subresult = self.app.get(relationship["links"]["self"])
-			assert subresult.json["data"] == data
+			self.assertEqual(subresult.json["data"], data)
 
 			# retrieve the related objects
 			subresult = self.app.get(relationship["links"]["related"])
 
 			# type and id must match
 			for subentry in subresult.json["data"]:
-				assert {"id": subentry["id"], "type": subentry["type"]} in data
+				self.assertIn({"id": subentry["id"], "type": subentry["type"]}, data)
 
 				if "links" in subentry and "self" in subentry["links"]:
 					subsubresult = self.app.get(subentry["links"]["self"])
-					assert subentry == subsubresult.json["data"]
+					self.assertEqual(subentry, subsubresult.json["data"])
 
 
 	def testIncludeParameterForwardRelationship(self):
 		result = self.app.get("/articles/2?include=cover")
 		JsonAPIValidator.validate(result.json)
-		assert "included" in result.json
+		self.assertIn("included", result.json)
 
 		# the server must not return any other fields than requested
-		assert len(result.json["included"]) is 1
+		self.assertIs(len(result.json["included"]), 1)
 
 		ref = result.json["data"]["relationships"]["cover"]["data"]
 		inc = result.json["included"][0]
 
-		assert inc["type"] == ref["type"]
-		assert inc["id"] == ref["id"]
+		self.assertEqual(inc["type"], ref["type"])
+		self.assertEqual(inc["id"], ref["id"])
 
 		# the self link must be valid and refer to the same object
 		subresult = self.app.get(inc["links"]["self"])
-		assert subresult.json["data"] == inc
+		self.assertEqual(subresult.json["data"], inc)
 
 
 	def testIncludeParameterReverseRelationship(self):
 		result = self.app.get("/articles/1?include=comments")
 		JsonAPIValidator.validate(result.json)
-		assert "included" in result.json
+		self.assertIn("included", result.json)
 
 		# the server must not return any other fields than requested
-		assert len(result.json["included"]) is len(COMMENT_BODIES)
+		self.assertIs(len(result.json["included"]), len(COMMENT_BODIES))
 
 		refs = result.json["data"]["relationships"]["comments"]["data"]
 
 		for inc in result.json["included"]:
-			assert {"id": inc["id"], "type": inc["type"]} in refs
+			self.assertIn({"id": inc["id"], "type": inc["type"]}, refs)
 
 			# the self link must be valid and refer to the same object
 			subresult = self.app.get(inc["links"]["self"])
-			assert subresult.json["data"] == inc
-			assert subresult.json["links"]["self"] == inc["links"]["self"]
+			self.assertEqual(subresult.json["data"], inc)
+			self.assertEqual(subresult.json["links"]["self"], inc["links"]["self"])
 
 
 	def testIncludeParameterWithInvalidFields(self):
@@ -633,8 +633,8 @@ class TestCorkscrew(unittest.TestSuite):
 		result = self.app.get("/people/1?fields[person]=age")
 		JsonAPIValidator.validate(result.json)
 
-		assert not "name" in result.json["data"]["attributes"]
-		assert "age" in result.json["data"]["attributes"]
+		self.assertNotIn( "name", result.json["data"]["attributes"])
+		self.assertIn("age", result.json["data"]["attributes"])
 
 
 	def testSparseFieldsetsWithIncludedObjects(self):
@@ -642,7 +642,7 @@ class TestCorkscrew(unittest.TestSuite):
 		JsonAPIValidator.validate(result.json)
 
 		for inc in result.json["included"]:
-			assert not "attributes" in inc
+			self.assertNotIn( "attributes", inc)
 
 		result = self.app.get("/comments/1?include=article.author&fields[person]=age")
 		JsonAPIValidator.validate(result.json)
@@ -651,7 +651,7 @@ class TestCorkscrew(unittest.TestSuite):
 		for inc in result.json["included"]:
 			if inc["type"] == "person":
 				is_included = True
-				assert "age" in inc["attributes"]
-				assert not "name" in inc["attributes"]
+				self.assertIn("age", inc["attributes"])
+				self.assertNotIn( "name", inc["attributes"])
 
-		assert is_included
+		self.assertIsNotNone(is_included)
