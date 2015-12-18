@@ -17,7 +17,7 @@ class PeeweeHandlerFactory(object):
 	resources are created, retrieved, listed, patched or deleted.
 	"""
 
-	def __init__(self, model, related = {}, listener = Listener()):
+	def __init__(self, model, related = None, listener = Listener()):
 		"""Return a new instance of PeeweeHandlerFactory.
 
 		Keyword arguments:
@@ -26,15 +26,15 @@ class PeeweeHandlerFactory(object):
 		"""
 
 		self.model = model
-		self.related = related
+		self.related = related or {}
 		self.listener = listener
 		self.context = None
 
 
-	def __entry_to_resource(self, entry, include = [], fields = {}, linkage = False):
+	def __entry_to_resource(self, entry, include = None, fields = None, linkage = False):
 		"""Formats a peewee database row as a JsonAPIResource."""
 
-		return entry_to_resource(entry, self.context, include, fields, linkage)
+		return entry_to_resource(entry, self.context, include or [], fields or {}, linkage)
 
 
 	def __get_reverse_field(self, target, field):
