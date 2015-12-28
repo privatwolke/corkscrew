@@ -41,10 +41,10 @@ class CorkscrewApplication(Bottle):
         # setup default error handling
         self.error_handler = {x: fn_error for x in xrange(400, 601)}
 
-    def register(self, model, related=None, endpoint=None):
+    def register(self, model, related=None, endpoint=None, listener=None):
         endpoint = endpoint or "/" + model._meta.name
         related = related or {}
-        factory = self.handler_factory(model, related)
+        factory = self.handler_factory(model, related, listener)
 
         self.context.add_factory(factory, endpoint)
         factory.context = self.context

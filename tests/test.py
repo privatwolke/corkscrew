@@ -705,7 +705,5 @@ class TestCorkscrew(unittest.TestCase):
         self.assertIsNotNone(is_included)
 
     def testLinkWithSpecifiedField(self):
-        result = self.app.get("/articles/1/revisions")
+        result = self.app.get("/articles/1/relationships/revisions")
         JsonAPIValidator.validate(result.json)
-
-        print(result.json)
