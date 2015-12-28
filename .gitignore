@@ -20,9 +20,11 @@ pip-log.txt
 # Unit test / coverage reports
 .coverage
 .tox
+htmlcov/
+nosetests.json
 
-#Translations
+# Translations
 *.mo
 
-#Mr Developer
+# Mr Developer
 .mr.developer.cfg

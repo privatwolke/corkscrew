@@ -5,6 +5,10 @@ all:
 
 clean:
 	rm -rf .virtualenv
+	rm -rf htmlcov
+	rm -rf .coverage
+	rm nosetests.json
 
 test:
-	nosetests
+	.virtualenv/bin/nosetests --with-coverage --with-json-extended
+	.virtualenv/bin/coverage html

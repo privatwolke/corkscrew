@@ -1,186 +1,215 @@
 # coding: utf-8
 
 import datetime
-from bottle import request, response
-from urlparse import urljoin
+
+from bottle import request
 from peewee import ForeignKeyField, PrimaryKeyField
-from corkscrew.jsonapi import JsonAPIResource, JsonAPIRelationships, JsonAPIException
+
+from corkscrew.jsonapi import JsonAPIResource
+from corkscrew.jsonapi import JsonAPIRelationships
+from corkscrew.jsonapi import JsonAPIException
+
+
+class Link(object):
+
+    def __init__(self, target, via=None, on=None):
+        self.target = target
+        self.via = via
+        self.on = on
+
+    def __str__(self):
+        return "Link({}, via={}, on={})".format(self.target, self.via, self.on)
 
 
 def get_primary_key(entry):
-	return getattr(entry, entry.__class__._meta.primary_key.name)
+    return getattr(entry, entry.__class__._meta.primary_key.name)
 
 
 def parse_fields_parameter():
-	fields = {}
-	for param in request.query:
-		if param.startswith("fields["):
-			fields[param[7:-1]] = getattr(request.query, param).split(",")
+    fields = {}
+    for param in request.query:
+        if param.startswith("fields["):
+            fields[param[7:-1]] = getattr(request.query, param).split(",")
 
-	return fields
+    return fields
 
 
 def include_is_valid(include, entry, factory):
-	related = factory.related if factory else {}
+    related = factory.related if factory else {}
 
-	for inc in include:
-		if list(set(inc.split("."))) != inc.split("."):
-			raise JsonAPIException("Circular include field specification detected.", status = 400)
+    for inc in include:
+        if list(set(inc.split("."))) != inc.split("."):
+            raise JsonAPIException(
+                "Circular include field specification detected.",
+                status=400
+            )
 
-		if len(inc):
-			field = inc.split(".")[0]
-			if not (hasattr(entry, field) or field in related.keys()):
-				raise JsonAPIException("Unknown field to be included: " + field, status = 400)
+        if len(inc):
+            field = inc.split(".")[0]
+            if not (hasattr(entry, field) or field in related.keys()):
+                raise JsonAPIException(
+                    "Unknown field to be included: " + field, status=400
+                )
 
 
 def include_matches(include, field):
-	matches = []
-	for inc in include:
-		if inc.startswith(field):
-			matches.append(inc[len(field) + 1:])
+    matches = []
+    for inc in include:
+        if inc.startswith(field):
+            matches.append(inc[len(field) + 1:])
 
-	return matches
+    return matches
 
 
-def entry_to_resource(entry, context, include = [], fields = {}, linkage = False):
-	factory = context.get_factory(entry.__class__)
-	model = entry.__class__
-	meta = model._meta
-	primary_key_field = meta.primary_key
-	primary_key = get_primary_key(entry)
+def entry_to_resource(entry, context,
+                      include=None, fields=None, linkage=False):
+    """Converts a peewee model instance to a resource object."""
 
-	# validate the include parameter
-	include_is_valid(include, entry, factory)
+    include = include or []
+    fields = fields or []
 
-	if linkage:
-		# we only want resource linkage
-		return ({
-			u"id": unicode(primary_key),
-			u"type": meta.name
-		}, [])
+    factory = context.get_factory(entry.__class__)
+    model = entry.__class__
+    meta = model._meta
+    primary_key = get_primary_key(entry)
 
-	# prepare the attribute dict and a relationship container
-	attributes = {}
-	included = []
-	base_uri = request.urlparts.scheme + "://" + request.urlparts.netloc
-	relationships = JsonAPIRelationships(base_uri)
+    # validate the include parameter
+    include_is_valid(include, entry, factory)
 
-	for field in meta.sorted_fields:
-		# for each field
+    if linkage:
+        # we only want resource linkage
+        return ({
+            u"id": unicode(primary_key),
+            u"type": meta.name
+        }, [])
 
-		if meta.name in fields and not field.name in fields[meta.name]:
-			# the client has requested certain fields and this is not one of them
-			continue
+    # prepare the attribute dict and a relationship container
+    attributes = {}
+    included = []
+    base_uri = request.urlparts.scheme + "://" + request.urlparts.netloc
+    relationships = JsonAPIRelationships(base_uri)
 
-		if isinstance(field, ForeignKeyField):
-			# we have a reference to another model, retrieve it
-			obj = getattr(entry, field.name)
+    for field in meta.sorted_fields:
+        # for each field
 
-			if obj:
-				# the reference is not null
-				relationships.add(
-					field.name, # name of the relation
-					context.get_endpoint(model), # the current endpoint to generate links
-					entry_to_resource(obj, context, linkage = True)[0], # resource linkage
-					primary_key # the current primary key
-				)
+        if meta.name in fields and field.name not in fields[meta.name]:
+            # the client requested certain fields and this is not one of them
+            continue
 
-				if include_matches(include, field.name):
-					incdata, incinc = entry_to_resource(
-						obj,
-						context,
-						include = include_matches(include, field.name),
-						fields = fields
-					)
+        if isinstance(field, ForeignKeyField):
+            # we have a reference to another model, retrieve it
+            obj = getattr(entry, field.name)
 
-					included.append(incdata)
-					included += incinc
+            if obj:
+                # the reference is not null
+                relationships.add(
+                    field.name,  # name of the relation
+                    context.get_endpoint(model),  # the current endpoint
+                    entry_to_resource(obj, context, linkage=True)[0],
+                    primary_key  # the current primary key
+                )
 
-			else:
-				# the reference is null
-				relationships.add(field.name, context.get_endpoint(model), None, key = primary_key)
+                if include_matches(include, field.name):
+                    incdata, incinc = entry_to_resource(
+                        obj,
+                        context,
+                        include=include_matches(include, field.name),
+                        fields=fields
+                    )
 
-		elif not isinstance(field, PrimaryKeyField):
-			# the field is anything else than a primary key (we keep these out of the attributes dict)
-			attr = getattr(entry, field.name)
-			if isinstance(attr, datetime.date):
-				# handle datetime instances
-				attr = str(attr)
+                    included.append(incdata)
+                    included += incinc
 
-			# save the attribute
-			attributes[field.name] = attr
+            else:
+                # the reference is null
+                relationships.add(
+                    field.name,
+                    context.get_endpoint(model),
+                    None,
+                    key=primary_key
+                )
 
-	if factory and factory.related:
-		# we have 1:n or n:m relations
-		for field, rel in factory.related.iteritems():
+        elif not isinstance(field, PrimaryKeyField):
+            # the field is anything else than a primary key
+            attr = getattr(entry, field.name)
+            if isinstance(attr, datetime.date):
+                # handle datetime instances
+                attr = str(attr)
 
-			via = None
+            # save the attribute
+            attributes[field.name] = attr
 
-			if isinstance(rel, tuple):
-				rel, via = rel
+    if factory and factory.related:
+        # we have 1:n or n:m relations
+        for field, rel in factory.related.iteritems():
 
-			if meta.name in fields and not field in fields[meta.name]:
-				# the client has requested certain fields, but this is not one of them
-				continue
+            if not isinstance(rel, Link):
+                rel = Link(rel)
 
-			data = []
+            if meta.name in fields and field not in fields[meta.name]:
+                # the client requested certain fields, but not this one
+                continue
 
-			if via:
-				query = rel.select().join(via).where(
-					get_reverse_field(via, model) == primary_key
-				)
-			else:
-				query = rel.select().where(
-					get_reverse_field(rel, model) == primary_key
-				)
+            data = []
 
-			# retrieve the related resources
-			for child_row in query:
-				data.append(
-					dict(entry_to_resource(child_row, context, linkage = True)[0])
-				)
+            if rel.via:
+                query = rel.target.select().join(rel.via).where(
+                    get_reverse_field(rel.via, model) == primary_key
+                )
+            else:
+                query = rel.target.select().where(
+                    get_reverse_field(rel.target, model) == primary_key
+                )
 
-				if include_matches(include, field):
-					incdata, incinc = entry_to_resource(
-						child_row,
-						context,
-						include = include_matches(include, field),
-						fields = fields
-					)
+            # retrieve the related resources
+            for child_row in query:
+                data.append(
+                    dict(
+                        entry_to_resource(child_row, context, linkage=True)[0]
+                    )
+                )
 
-					included.append(incdata)
-					included += incinc
+                if include_matches(include, field):
+                    incdata, incinc = entry_to_resource(
+                        child_row,
+                        context,
+                        include=include_matches(include, field),
+                        fields=fields
+                    )
 
-			relationships.add(
-				field,
-				context.get_endpoint(model),
-				data,
-				key = primary_key
-			)
+                    included.append(incdata)
+                    included += incinc
 
-	# construct a resource object
-	resource = JsonAPIResource(primary_key, meta.name, attributes = attributes)
+            relationships.add(
+                field,
+                context.get_endpoint(model),
+                data,
+                key=primary_key
+            )
 
-	# add a self link to the resource if it has its own endpoint
-	# note that models that are not exposed directly through app.register do not
-	# have self links.
-	if context.get_endpoint(model):
-		resource.links = {
-			"self": "{}://{}{}/{}".format(
-				request.urlparts.scheme,
-				request.urlparts.netloc,
-				context.get_endpoint(model),
-				primary_key
-			)
-		}
+    # construct a resource object
+    resource = JsonAPIResource(primary_key, meta.name, attributes=attributes)
 
-	if len(relationships):
-		resource.relationships = relationships
+    # add a self link to the resource if it has its own endpoint
+    # note that models that are not exposed directly through app.register do
+    # not have self links.
+    if context.get_endpoint(model):
+        resource.links = {
+            "self": "{}://{}{}/{}".format(
+                request.urlparts.scheme,
+                request.urlparts.netloc,
+                context.get_endpoint(model),
+                primary_key
+            )
+        }
 
-	return (resource, included)
+    if len(relationships):
+        resource.relationships = relationships
+
+    return (resource, included)
 
 
 def get_reverse_field(child, parent):
-	for field in child._meta.sorted_fields:
-		if isinstance(field, ForeignKeyField) and field.rel_model == parent:
-			return field
+    for field in child._meta.sorted_fields:
+        if isinstance(field, ForeignKeyField) and field.rel_model == parent:
+            return field
