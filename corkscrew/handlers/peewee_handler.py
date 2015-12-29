@@ -160,6 +160,9 @@ class PeeweeHandlerFactory(object):
         def fn_create():
             """Creates a new resource and returns it."""
 
+            if request.method == "OPTIONS":
+                return
+
             request_doc = json.loads(request.body.getvalue())
             JsonAPIValidator.validate_create(
                 request_doc,
@@ -200,6 +203,9 @@ class PeeweeHandlerFactory(object):
         def fn_get(_id):
             """Retrieves a singlar resource by its ID."""
 
+            if request.method == "OPTIONS":
+                return
+
             self.listener.before_get(_id)
             response_doc = self.__get(_id)
             self.listener.after_get(response_doc)
@@ -216,6 +222,9 @@ class PeeweeHandlerFactory(object):
             """Returns either a listing of the relationship or the data itself
             depending on the linkage parameter.
             """
+
+            if request.method == "OPTIONS":
+                return
 
             response_doc = JsonAPIResponse(request.url)
 
@@ -256,6 +265,9 @@ class PeeweeHandlerFactory(object):
             itself, depending on the linkage parameter.
             """
 
+            if request.method == "OPTIONS":
+                return
+
             response_doc = JsonAPIResponse(request.url)
 
             if target.via:
@@ -287,6 +299,9 @@ class PeeweeHandlerFactory(object):
         def fn_list():
             """Returns a listing of resources."""
 
+            if request.method == "OPTIONS":
+                return
+
             self.listener.before_list()
             response_doc = JsonAPIResponse(request.url)
 
@@ -311,6 +326,9 @@ class PeeweeHandlerFactory(object):
         @ErrorHandler
         def fn_patch_relationship(_id):
             """Patches a relationship with the given ID and returns."""
+
+            if request.method == "OPTIONS":
+                return
 
             request_doc = json.loads(request.body.getvalue())
             # JsonAPIValidator.validate_patch(request_doc, _id, None)
@@ -343,6 +361,9 @@ class PeeweeHandlerFactory(object):
         @ErrorHandler
         def fn_patch(_id, request_doc=None):
             """Handles PATCH requests to the given resource."""
+
+            if request.method == "OPTIONS":
+                return
 
             request_doc = request_doc or json.loads(request.body.getvalue())
             JsonAPIValidator.validate_patch(
@@ -387,6 +408,9 @@ class PeeweeHandlerFactory(object):
         @ErrorHandler
         def fn_delete(_id):
             """Deletes a resource."""
+
+            if request.method == "OPTIONS":
+                return
 
             self.listener.before_delete(_id)
 

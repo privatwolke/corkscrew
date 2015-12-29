@@ -707,3 +707,17 @@ class TestCorkscrew(unittest.TestCase):
     def testLinkWithSpecifiedField(self):
         result = self.app.get("/articles/1/relationships/revisions")
         JsonAPIValidator.validate(result.json)
+
+    def testOPTIONSRequest(self):
+        # all of these should return all 200 OK code
+        self.app.options("/articles")
+        self.app.options("/articles/1")
+        self.app.options("/articles/1/cover")
+        self.app.options("/articles/1/relationships/cover")
+        self.app.options("/photos/2/tags")
+        self.app.options("/articles/1?include=author")
+
+    def testCORSHeaders(self):
+        result = self.app.get("/articles")
+        self.assertIn("Access-Control-Allow-Origin", result.headers)
+        self.assertEqual(result.headers["Access-Control-Allow-Origin"], "*")

@@ -49,11 +49,15 @@ class CorkscrewApplication(Bottle):
         self.context.add_factory(factory, endpoint)
         factory.context = self.context
 
-        self.get(endpoint)(factory.list())
-        self.get(endpoint + "/<_id>")(factory.get())
-        self.post(endpoint)(factory.create())
-        self.route(endpoint + "/<_id>", "PATCH")(factory.patch())
-        self.delete(endpoint + "/<_id>")(factory.delete())
+        self.route(endpoint, ["GET", "OPTIONS"])(factory.list())
+        self.route(endpoint + "/<_id>", ["GET", "OPTIONS"])(factory.get())
+        self.route(endpoint, ["POST", "OPTIONS"])(factory.create())
+        self.route(endpoint + "/<_id>", ["PATCH", "OPTIONS"])(factory.patch())
+
+        self.route(
+            endpoint + "/<_id>",
+            ["DELETE", "OPTIONS"]
+        )(factory.delete())
 
         # add forward relationships to single resources (1:1, n:1)
         for f in factory.model._meta.sorted_fields:
@@ -69,17 +73,26 @@ class CorkscrewApplication(Bottle):
 
     def register_relation(self, factory, name, endpoint):
         ep = "{}/<_id>/{}".format(endpoint, name)
-        self.get(ep)(factory.get_relationship(name))
+        self.route(ep, ["GET", "OPTIONS"])(factory.get_relationship(name))
 
         ep = "{}/<_id>/relationships/{}".format(endpoint, name)
-        self.get(ep)(factory.get_relationship(name, linkage=True))
+        self.route(
+            ep,
+            ["GET", "OPTIONS"]
+        )(factory.get_relationship(name, linkage=True))
 
-        self.route(ep, "PATCH")(factory.patch_relationship(name))
+        self.route(ep, ["PATCH", "OPTIONS"])(factory.patch_relationship(name))
 
     def register_reverse_relation(self, factory, name, endpoint, target):
         ep = "{}/<_id>/{}".format(endpoint, name)
-        self.get(ep)(factory.get_reverse_relationship(target))
+        self.route(
+            ep,
+            ["GET", "OPTIONS"]
+        )(factory.get_reverse_relationship(target))
 
         ep = "{}/<_id>/relationships/{}".format(endpoint, name)
-        self.get(ep)(factory.get_reverse_relationship(target, linkage=True))
-        self.route(ep, "PATCH")(factory.patch_relationship(name))
+        self.route(ep, ["PATCH", "OPTIONS"])(factory.patch_relationship(name))
+        self.route(
+            ep,
+            ["GET", "OPTIONS"]
+        )(factory.get_reverse_relationship(target, linkage=True))
