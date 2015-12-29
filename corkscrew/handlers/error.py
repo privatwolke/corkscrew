@@ -15,6 +15,7 @@ def fn_error(error):
     try:
         error.content_type = CONTENT_TYPE
         error.set_header("Access-Control-Allow-Origin", "*")
+        error.set_header("Access-Control-Allow-Headers", "X-Requested-With")
         doc = JsonAPIResponse(request.url)
         err = JsonAPIError(code=error.status, title=error.body)
         doc.errors.append(err)
@@ -27,6 +28,7 @@ def ErrorHandler(fn):
     def outer(*args, **kwargs):
         response.content_type = CONTENT_TYPE
         response.set_header("Access-Control-Allow-Origin", "*")
+        response.set_header("Access-Control-Allow-Headers", "X-Requested-With")
 
         try:
             return fn(*args, **kwargs)

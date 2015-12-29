@@ -720,4 +720,9 @@ class TestCorkscrew(unittest.TestCase):
     def testCORSHeaders(self):
         result = self.app.get("/articles")
         self.assertIn("Access-Control-Allow-Origin", result.headers)
+        self.assertIn("Access-Control-Allow-Methods", result.headers)
         self.assertEqual(result.headers["Access-Control-Allow-Origin"], "*")
+        self.assertEqual(
+            result.headers["Access-Control-Allow-Methods"],
+            "X-Requested-With"
+        )
