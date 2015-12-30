@@ -181,7 +181,8 @@ class PeeweeHandlerFactory(object):
                     attributes[k] = dat["data"]["id"]
 
             if "id" in request_doc["data"]:
-                attributes["id"] = request_doc["data"]["id"]
+                primary = self.model._meta.primary_key.name
+                attributes[primary] = request_doc["data"]["id"]
 
             created = self.model.create(**attributes)
 
