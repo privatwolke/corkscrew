@@ -26,6 +26,12 @@ def fn_error(error):
                 request.get_header("Access-Control-Request-Headers")
             )
 
+        if request.get_header("Access-Control-Request-Method"):
+            error.set_header(
+                "Access-Control-Allow-Methods",
+                "GET, POST, PATCH, DELETE, OPTIONS"
+            )
+
         doc = JsonAPIResponse(request.url)
         err = JsonAPIError(code=error.status, title=error.body)
         doc.errors.append(err)
@@ -47,6 +53,12 @@ def ErrorHandler(fn):
             response.set_header(
                 "Access-Control-Allow-Headers",
                 request.get_header("Access-Control-Request-Headers")
+            )
+
+        if request.get_header("Access-Control-Request-Method"):
+            response.set_header(
+                "Access-Control-Allow-Methods",
+                "GET, POST, PATCH, DELETE, OPTIONS"
             )
 
         try:
