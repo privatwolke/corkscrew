@@ -718,11 +718,23 @@ class TestCorkscrew(unittest.TestCase):
         self.app.options("/articles/1?include=author")
 
     def testCORSHeaders(self):
-        result = self.app.get("/articles")
+        # simulate a browser
+        result = self.app.options("/articles", headers={
+            "Origin": "http://example.org",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "X-Requested-With"
+        })
+
         self.assertIn("Access-Control-Allow-Origin", result.headers)
         self.assertIn("Access-Control-Allow-Methods", result.headers)
         self.assertEqual(result.headers["Access-Control-Allow-Origin"], "*")
-        self.assertEqual(
-            result.headers["Access-Control-Allow-Methods"],
-            "X-Requested-With"
+        methods = map(
+            lambda x: x.strip(),
+            result.headers["Access-Control-Allow-Methods"].split(",")
+        )
+
+        self.assertIn("GET", methods)
+        self.assertIn(
+            "X-Requested-With".lower(),
+            result.headers["Access-Control-Allow-Headers"].lower()
         )
