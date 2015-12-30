@@ -14,8 +14,18 @@ from corkscrew.jsonapi import CONTENT_TYPE
 def fn_error(error):
     try:
         error.content_type = CONTENT_TYPE
-        error.set_header("Access-Control-Allow-Origin", "*")
-        error.set_header("Access-Control-Allow-Headers", "X-Requested-With")
+        if request.get_header("Origin"):
+            error.set_header(
+                "Access-Control-Allow-Origin",
+                "*"
+            )
+
+        if request.get_header("Access-Control-Request-Headers"):
+            error.set_header(
+                "Access-Control-Allow-Headers",
+                request.get_header("Access-Control-Request-Headers")
+            )
+
         doc = JsonAPIResponse(request.url)
         err = JsonAPIError(code=error.status, title=error.body)
         doc.errors.append(err)
@@ -27,8 +37,17 @@ def fn_error(error):
 def ErrorHandler(fn):
     def outer(*args, **kwargs):
         response.content_type = CONTENT_TYPE
-        response.set_header("Access-Control-Allow-Origin", "*")
-        response.set_header("Access-Control-Allow-Headers", "X-Requested-With")
+        if request.get_header("Origin"):
+            response.set_header(
+                "Access-Control-Allow-Origin",
+                "*"
+            )
+
+        if request.get_header("Access-Control-Request-Headers"):
+            response.set_header(
+                "Access-Control-Allow-Headers",
+                request.get_header("Access-Control-Request-Headers")
+            )
 
         try:
             return fn(*args, **kwargs)
